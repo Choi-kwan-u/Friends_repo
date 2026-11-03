@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "id": "campaign-stage-01",
+  "name": "First Contact",
+  "waves": [
+    {
+      "id": "wave-01",
+      "formation": {
+        "grid": [
+          [
+            {
+              "enemyType": "C",
+              "health": 1
+            },
+            {
+              "enemyType": "C",
+              "health": 1
+            },
+            {
+              "enemyType": "C",
+              "health": 1
+            },
+            {
+              "enemyType": "C",
+              "health": 1
+            },
+            {
+              "enemyType": "C",
+              "health": 1
+            }
+          ],
+          [
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            {
+              "enemyType": "B",
+              "health": 1
+            }
+          ],
+          [
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            {
+              "enemyType": "B",
+              "health": 1
+            }
+          ],
+          [
+            {
+              "enemyType": "A",
+              "health": 1
+            },
+            {
+              "enemyType": "A",
+              "health": 1
+            },
+            {
+              "enemyType": "A",
+              "health": 1
+            },
+            {
+              "enemyType": "A",
+              "health": 1
+            },
+            {
+              "enemyType": "A",
+              "health": 1
+            }
+          ]
+        ],
+        "initialX": 20,
+        "initialY": 100
+      },
+      "movementBaseFrames": 60,
+      "shootingIntervalMs": 2000
+    },
+    {
+      "id": "wave-02",
+      "formation": {
+        "grid": [
+          [
+            {
+              "enemyType": "C",
+              "health": 1
+            },
+            null,
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            null,
+            {
+              "enemyType": "C",
+              "health": 1
+            }
+          ],
+          [
+            {
+              "enemyType": "A",
+              "health": 1
+            },
+            null,
+            null,
+            null,
+            {
+              "enemyType": "B",
+              "health": 1
+            }
+          ],
+          [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            {
+              "enemyType": "B",
+              "health": 1
+            },
+            null,
+            {
+              "enemyType": "A",
+              "health": 1
+            },
+            null,
+            {
+              "enemyType": "A",
+              "health": 1
+            }
+          ]
+        ],
+        "initialX": 20,
+        "initialY": 100
+      },
+      "movementBaseFrames": 50,
+      "shootingIntervalMs": 1500
+    }
+  ]
+}

@@ -1,0 +1,246 @@
+import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+
+plugins {
+    id 'application'
+    id 'jacoco'
+    id 'com.diffplug.spotless' version '8.10.4'
+}
+
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    // Use Gradle's JDK for compilation and execution, targeting Java 17.
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+jacoco {
+    toolVersion = '0.8.15'
+}
+
+spotless {
+    encoding 'UTF-8'
+    lineEndings = 'UNIX'
+    // Basic whitespace only; indentation and imports keep their existing style.
+    java {
+        target 'src/**/*.java', 'test/**/*.java'
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    format 'buildFiles', {
+        target '*.gradle', 'gradle.properties', '.editorconfig', '.gitattributes', '.run/*.run.xml'
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+sourceSets {
+    main {
+        java.srcDirs = ['src']
+        resources.srcDirs = ['res']
+    }
+    test {
+        java.srcDirs = ['test']
+        resources.srcDirs = ['test']
+        resources.include 'level/fixtures/*.json'
+    }
+}
+
+tasks.named('processTestResources') {
+    from('examples/levels') {
+        include '*.json'
+        into 'examples/levels'
+    }
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    mainClass = 'engine.Core'
+    applicationDefaultJvmArgs = ['-Dfile.encoding=UTF-8']
+}
+
+tasks.named('run', JavaExec) {
+    // Keep development saves outside build/, which "clean" removes.
+    systemProperty 'invaders.storageDir', layout.projectDirectory.asFile.absolutePath
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    systemProperty 'java.awt.headless', 'true'
+    systemProperty 'file.encoding', 'UTF-8'
+    def testClasspath = sourceSets.test.runtimeClasspath
+    def coverage = extensions.getByType(JacocoTaskExtension)
+    // Resolve arguments when the test JVM launches, including isolated child JVM coverage.
+    jvmArgumentProviders.add({
+        ["-Dinvaders.test.classpath=${testClasspath.asPath}",
+         "-Dinvaders.test.coverageAgent=${coverage.asJvmArg}"]
+    } as CommandLineArgumentProvider)
+    def workDirectory = layout.buildDirectory.dir('test-work').get().asFile
+    workingDir = workDirectory
+    systemProperty 'user.home', new File(workDirectory, 'home').absolutePath
+    // Keep child JVMs under build/ so JaCoCo can use relative paths even in non-ASCII checkouts.
+    systemProperty 'java.io.tmpdir', new File(workDirectory, 'tmp').absolutePath
+    doFirst {
+        new File(workDirectory, 'home').mkdirs()
+        new File(workDirectory, 'out').mkdirs()
+        new File(workDirectory, 'tmp').mkdirs()
+    }
+    testLogging {
+        events 'failed', 'skipped'
+        exceptionFormat = 'full'
+    }
+}
+
+// Standalone main() suites run in separate JVMs alongside the JUnit tests.
+def smokeTestClasses = [
+    'PlayerStatSourceTest',
+    'PlayerStatusExtraLifeTest',
+    'engine.CooldownVarianceTest',
+    'engine.CoreDifficultySettingsTest',
+    'entity.BossDefeatTest',
+    'entity.BossPhaseTest',
+    'entity.BulletOwnershipTest',
+    'entity.BurstCancellationTest',
+    'entity.EnemyShootingCooldownTest',
+    'entity.FormationMovementSpeedTest',
+    'entity.FormationSmoothnessTest',
+    'entity.PlayerStatusEventTest',
+    'entity.PlayerStatusShieldDurationTest',
+    'entity.PlayerStatusShieldTest',
+    'entity.PlayerStatusSlowDebuffTest',
+    'level.LevelModelTest',
+    'records.GameplayIntegrationTest',
+    'records.RecordsSmokeTest',
+    'screen.BossKillScoreTest',
+    'screen.BossStageClearTest',
+    'screen.BossTypeByLevelTest',
+    'screen.BulletCleanupTest',
+    'screen.FallingObstacleIntegrationTest',
+    'screen.GameScreenMovementTest',
+    'screen.GameScreenWavesTest',
+    'screen.InfiniteGameScreenControlsTest',
+    'screen.LevelCompletedEventTest',
+    'screen.PlayerDamagePathTest',
+    'screen.ShipCustomizationAppliedTest',
+    'screen.ShipShieldRestrictionTest',
+    'screen.StageFailureTest',
+    'vfx.IconTest'
+]
+
+def coveragePlugin = extensions.getByType(JacocoPluginExtension)
+def smokeTasks = smokeTestClasses.collect { className ->
+    tasks.register("smoke${className.tokenize('.').last()}", JavaExec) { smokeTask ->
+        coveragePlugin.applyTo(smokeTask)
+        def coverage = extensions.getByType(JacocoTaskExtension)
+        group = 'verification'
+        description = "Runs ${className} with assertions enabled."
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = className
+        enableAssertions = true
+        systemProperty 'java.awt.headless', 'true'
+        systemProperty 'file.encoding', 'UTF-8'
+        def workDirectory = layout.buildDirectory.dir("smoke-work/${className}").get().asFile
+        workingDir = workDirectory
+        systemProperty 'user.home', new File(workDirectory, 'home').absolutePath
+        doFirst {
+            new File(workDirectory, 'home').mkdirs()
+            new File(workDirectory, 'out').mkdirs()
+            systemProperty 'invaders.test.coverageAgent', coverage.asJvmArg
+        }
+    }
+}
+
+// Fail instead of silently omitting a new standalone test from check and coverage.
+def testSources = sourceSets.test.allJava
+def oldTestSources = fileTree('tests') { include '**/*.java' }
+tasks.register('verifyTestRegistration') {
+    group = 'verification'
+    description = 'Checks test locations and standalone main() registration.'
+    inputs.files(testSources)
+    inputs.files(oldTestSources)
+    inputs.property('smokeTestClasses', smokeTestClasses)
+    doLast {
+        if (!oldTestSources.isEmpty()) {
+            throw new GradleException('Move Java test files from tests/ to test/, keeping their package directories.')
+        }
+        def standaloneTests = []
+        testSources.files.findAll { it.name.endsWith('Test.java') }.each { source ->
+            def code = source.getText('UTF-8')
+            def hasMain = code =~ /(?m)^\s*public\s+static\s+void\s+main\s*\(/
+            def hasJUnit = code =~ /@(?:org\.junit\.[\w.]+\.)?(?:Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\b/
+            // JUnit classes may have a main() helper for subprocess isolation.
+            if (hasMain.find() && !hasJUnit.find()) {
+                def packageName = code =~ /(?m)^\s*package\s+([\w.]+)\s*;/
+                def prefix = packageName.find() ? packageName.group(1) + '.' : ''
+                standaloneTests.add(prefix + source.name.substring(0, source.name.length() - 5))
+            }
+        }
+        def unregistered = standaloneTests - smokeTestClasses
+        def stale = smokeTestClasses - standaloneTests
+        if (unregistered || stale) {
+            throw new GradleException("Update smokeTestClasses in build.gradle. Unregistered: ${unregistered}; missing or migrated: ${stale}.")
+        }
+        logger.lifecycle("Verified ${standaloneTests.size()} standalone test suites; JUnit tests in test/ are discovered automatically.")
+    }
+}
+
+tasks.named('test') {
+    dependsOn tasks.named('verifyTestRegistration')
+}
+
+tasks.register('smokeTest') {
+    group = 'verification'
+    description = 'Runs all standalone main() regression checks.'
+    dependsOn smokeTasks
+    dependsOn tasks.named('verifyTestRegistration')
+}
+
+tasks.register('testRecords') {
+    group = 'verification'
+    description = 'Runs the records, gameplay integration, and wave regression checks.'
+    dependsOn 'smokeRecordsSmokeTest', 'smokeGameplayIntegrationTest', 'smokeGameScreenWavesTest'
+}
+
+tasks.named('jacocoTestReport') {
+    description = 'Generates combined JUnit and standalone regression coverage (HTML and XML).'
+    dependsOn tasks.named('test'), tasks.named('smokeTest')
+    smokeTasks.each { executionData it.get() }
+    reports {
+        html.required = true
+        xml.required = true
+        csv.required = false
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('jacocoTestReport')
+}
+
+tasks.named('jar', Jar) {
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+}
+
+tasks.named('wrapper', Wrapper) {
+    gradleVersion = '9.8.2'
+    distributionType = Wrapper.DistributionType.BIN
+    distributionSha256Sum = '21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607'
+    networkTimeout = 60000
+}

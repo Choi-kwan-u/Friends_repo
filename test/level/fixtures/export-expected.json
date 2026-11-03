@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "custom-stage",
+  "name": "한글 \"stage\"\\\n\b\f\r\t\u0000\u001f\ud83d\ude80",
+  "waves": [
+    {
+      "id": "wave-02",
+      "formation": {
+        "initialX": 40,
+        "initialY": 120,
+        "grid": [
+          [
+            null,
+            {
+              "enemyType": "A",
+              "health": 1
+            },
+            null
+          ],
+          [
+            null,
+            null,
+            null
+          ],
+          [
+            null,
+            {
+              "enemyType": "enemy\"\\\n\t\u0001X",
+              "health": 2147483647
+            },
+            null
+          ]
+        ]
+      },
+      "movementBaseFrames": 0,
+      "shootingIntervalMs": 2147483647
+    },
+    {
+      "id": "wave-01",
+      "formation": {
+        "initialX": 0,
+        "initialY": 0,
+        "grid": [
+          [
+            {
+              "enemyType": "C",
+              "health": 2
+            }
+          ]
+        ]
+      },
+      "movementBaseFrames": 60,
+      "shootingIntervalMs": 2000
+    }
+  ]
+}
