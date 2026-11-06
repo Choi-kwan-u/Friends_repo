@@ -612,6 +612,35 @@ public final class DrawManager {
     }
 
     /**
+     * Draws the Infinite mode high score at the top center, where Campaign
+     * shows its level. While the current run beats it, the line becomes a
+     * blinking "NEW RECORD" with the current score.
+     *
+     * @param screen
+     *                  Screen to draw on.
+     * @param bestScore
+     *                  Best saved Infinite mode score.
+     * @param score
+     *                  Current score.
+     * @param newRecord
+     *                  True if the current score beats the best one.
+     */
+    public void drawInfiniteHighScore(final Screen screen, final int bestScore,
+            final int score, final boolean newRecord) {
+        if (newRecord && (System.currentTimeMillis() / 300) % 2 != 0)
+            return;
+        backBufferGraphics.setFont(fontRegular);
+        backBufferGraphics.setColor(newRecord ? Color.YELLOW : Color.WHITE);
+
+        String text = newRecord
+                ? String.format("NEW RECORD %04d", score)
+                : String.format("HI %04d", bestScore);
+        int textWidth = backBufferGraphics.getFontMetrics().stringWidth(text);
+        backBufferGraphics.drawString(text,
+                (screen.getWidth() - textWidth) / 2, 25);
+    }
+
+    /**
      * Draws a thick line from side to side of the screen.
      *
      * @param screen
@@ -666,6 +695,21 @@ public final class DrawManager {
      *                 Recharge progress between 0 and 1.
      */
     public void drawAnnihilatorGauge(final Screen screen, final float progress) {
+        drawAnnihilatorGauge(screen, progress, true);
+    }
+
+    /**
+     * Draws the Orbital Annihilator gauge under the score.
+     *
+     * @param screen
+     *                 Screen to draw on.
+     * @param progress
+     *                 Fill level between 0 and 1.
+     * @param greenWhenFull
+     *                 True to draw a full gauge in green instead of red.
+     */
+    public void drawAnnihilatorGauge(final Screen screen, final float progress,
+            final boolean greenWhenFull) {
         int barWidth = 80;
         int barX = screen.getWidth() - barWidth - 20;
         int barY = 29;
@@ -673,7 +717,8 @@ public final class DrawManager {
         backBufferGraphics.setColor(Color.DARK_GRAY);
         backBufferGraphics.fillRect(barX, barY, barWidth, 6);
 
-        backBufferGraphics.setColor(progress >= 1f ? Color.GREEN : Color.RED);
+        backBufferGraphics.setColor(greenWhenFull && progress >= 1f
+                ? Color.GREEN : Color.RED);
         backBufferGraphics.fillRect(barX, barY, (int) (barWidth * progress), 6);
     }
 
@@ -854,28 +899,56 @@ public final class DrawManager {
     }
 
     /**
-     * Draws high scores.
+     * Draws the Campaign and Infinite mode high scores side by side.
      *
      * @param screen
      *                   Screen to draw on.
-     * @param highScores
-     *                   List of high scores.
+     * @param campaignScores
+     *                   Campaign high scores, left column.
+     * @param infiniteScores
+     *                   Infinite mode high scores, right column.
      */
     public void drawHighScores(final Screen screen,
-            final List<Score> highScores) {
-        backBufferGraphics.setColor(Color.WHITE);
-        int i = 0;
-        String scoreString = "";
+            final List<Score> campaignScores,
+            final List<Score> infiniteScores) {
+        drawHighScoreColumn(screen, "CAMPAIGN", campaignScores,
+                screen.getWidth() / 4);
+        drawHighScoreColumn(screen, "INFINITE", infiniteScores,
+                screen.getWidth() * 3 / 4);
+    }
 
+    /** Draws one titled column of high scores centered on centerX. */
+    private void drawHighScoreColumn(final Screen screen, final String title,
+            final List<Score> highScores, final int centerX) {
+        backBufferGraphics.setFont(fontRegular);
+        int headerY = screen.getHeight() / 4 + 10;
+        backBufferGraphics.setColor(Color.CYAN);
+        backBufferGraphics.drawString(title,
+                centerX - fontRegularMetrics.stringWidth(title) / 2, headerY);
+
+        int firstRowY = screen.getHeight() / 4
+                + fontRegularMetrics.getHeight() * 2;
+        if (highScores == null || highScores.isEmpty()) {
+            String empty = "NO RECORDS";
+            backBufferGraphics.setColor(Color.GRAY);
+            backBufferGraphics.drawString(empty,
+                    centerX - fontRegularMetrics.stringWidth(empty) / 2,
+                    firstRowY);
+            return;
+        }
+
+        int i = 0;
         for (Score score : highScores) {
-            scoreString = String.format("%s        %04d", score.getName(),
+            // The rank badge changes the color, so set it on every row.
+            backBufferGraphics.setColor(Color.WHITE);
+            String scoreString = String.format("%s  %04d", score.getName(),
                     score.getScore());
             int rowY = screen.getHeight() / 4
                     + fontRegularMetrics.getHeight() * (i + 1) * 2;
-            drawCenteredRegularString(screen, scoreString, rowY);
-            drawColorGrid(RankBadge.forRank(i + 1), screen.getWidth() / 2
-                    - fontRegularMetrics.stringWidth(scoreString) / 2
-                    - RankBadge.WIDTH * 2 - 12,
+            int textX = centerX - fontRegularMetrics.stringWidth(scoreString) / 2;
+            backBufferGraphics.drawString(scoreString, textX, rowY);
+            drawColorGrid(RankBadge.forRank(i + 1),
+                    textX - RankBadge.WIDTH * 2 - 8,
                     rowY - 5 - RankBadge.HEIGHT - 4, 2);
             i++;
         }

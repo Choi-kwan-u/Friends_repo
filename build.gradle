@@ -134,6 +134,7 @@ def smokeTestClasses = [
     'screen.GameScreenMovementTest',
     'screen.GameScreenWavesTest',
     'screen.InfiniteGameScreenControlsTest',
+    'screen.InfiniteGameScreenItemsTest',
     'screen.LevelCompletedEventTest',
     'screen.PlayerDamagePathTest',
     'screen.ShipCustomizationAppliedTest',

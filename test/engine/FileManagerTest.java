@@ -68,6 +68,43 @@ class FileManagerTest {
     }
 
     @Test
+    @DisplayName("Campaign and Infinite high scores are saved in separate files")
+    void testInfiniteHighScoresKeptApartFromCampaign() throws IOException {
+        String previous = System.getProperty("invaders.storageDir");
+        try {
+            System.setProperty("invaders.storageDir", tempDir.toString());
+
+            // No Infinite file yet: empty list, not the default Campaign scores.
+            assertTrue(fileManager.loadInfiniteHighScores().isEmpty());
+            assertFalse(fileManager.loadHighScores().isEmpty());
+
+            fileManager.saveHighScores(java.util.List.of(new Score("CAM", 300)));
+            fileManager.saveInfiniteHighScores(java.util.List.of(
+                    new Score("INF", 100), new Score("TOP", 900)));
+
+            assertTrue(Files.exists(tempDir.resolve("scores")));
+            assertTrue(Files.exists(tempDir.resolve(
+                    FileManager.INFINITE_SCORES_FILENAME)));
+
+            java.util.List<Score> campaign = fileManager.loadHighScores();
+            assertEquals(1, campaign.size());
+            assertEquals("CAM", campaign.get(0).getName());
+
+            java.util.List<Score> infinite = fileManager.loadInfiniteHighScores();
+            assertEquals(2, infinite.size());
+            assertEquals("TOP", infinite.get(0).getName());
+            assertEquals(900, infinite.get(0).getScore());
+            assertEquals("INF", infinite.get(1).getName());
+        } finally {
+            if (previous == null) {
+                System.clearProperty("invaders.storageDir");
+            } else {
+                System.setProperty("invaders.storageDir", previous);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("loadPlayerAssets throws IOException when unlocked content ID has malformed URL encoding")
     void testLoadMalformedEncodedUnlockIdThrowsIOException() throws IOException {
         String malformedData = "version=1\nbalance=100\nunlockedContentIds=VALID_SHIP,%ZZ_INVALID\nitemQuantities=ITEM_A:1\n";

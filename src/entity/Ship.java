@@ -626,6 +626,15 @@ public class Ship extends Entity {
     }
 
     /**
+     * Turns the Energy Shield on whatever the ship type. Only Infinite mode
+     * uses this: it always plays the Standard Ship, which cannot hold a
+     * shield through {@link #setShieldActive(boolean)}.
+     */
+    public void activateShieldIgnoringShipType() {
+        this.isShieldActive = true;
+    }
+
+    /**
      * Drops the bullets a burst still owes. Used when the ship stops being
      * allowed to shoot part-way through one, so the remaining shots are
      * lost rather than fired once shooting is allowed again.

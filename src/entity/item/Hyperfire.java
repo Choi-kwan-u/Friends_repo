@@ -7,18 +7,33 @@ import audio.AudioManager;
 /**
  * Hyperfire item.
  * Reduces the player's shooting cooldown by 60%
- * for 8 seconds.
+ * for 8 seconds (by default).
  */
 public class Hyperfire extends Item {
 
-    private static final long DURATION_MS = 8_000;
+    /** Default duration (Campaign), in milliseconds. */
+    private static final long DEFAULT_DURATION_MS = 8_000;
+
+    /** Duration of the buff, in milliseconds. */
+    private final long duration;
 
     /**
      * Creates a Hyperfire item at the given position.
      */
     public Hyperfire(final int positionX, final int positionY) {
-        super(positionX, positionY, 16, 24, SpriteType.Hyperfire);
+        this(positionX, positionY, DEFAULT_DURATION_MS);
+    }
 
+    /**
+     * Creates a Hyperfire item with its own duration.
+     *
+     * @param duration
+     *            Duration of the buff, in milliseconds.
+     */
+    public Hyperfire(final int positionX, final int positionY,
+                     final long duration) {
+        super(positionX, positionY, 16, 24, SpriteType.Hyperfire);
+        this.duration = duration;
     }
 
     /**
@@ -43,7 +58,7 @@ public class Hyperfire extends Item {
      */
     @Override
     public long getDuration() {
-        return DURATION_MS;
+        return this.duration;
     }
 
     /**

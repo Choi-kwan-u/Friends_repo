@@ -195,27 +195,49 @@ public final class FileManager {
 		return highScores;
 	}
 
+	/** Campaign high scores file. */
+	public static final String SCORES_FILENAME = "scores";
+	/** Infinite mode high scores file, kept apart from the Campaign ones. */
+	public static final String INFINITE_SCORES_FILENAME = "scores_infinite";
+
 	/**
-	 * Loads high scores from file, and returns a sorted list of pairs score -
-	 * value.
+	 * Loads the Campaign high scores from file, and returns a sorted list of
+	 * pairs score - value.
 	 *
 	 * @return Sorted list of scores - players.
 	 * @throws IOException
 	 *             In case of loading problems.
 	 */
 	public List<Score> loadHighScores() throws IOException {
+		return loadScores(SCORES_FILENAME, true);
+	}
+
+	/**
+	 * Loads the Infinite mode high scores. Empty until a first Infinite
+	 * score is saved: the default Campaign scores are not copied.
+	 *
+	 * @return Sorted list of scores - players.
+	 * @throws IOException
+	 *             In case of loading problems.
+	 */
+	public List<Score> loadInfiniteHighScores() throws IOException {
+		return loadScores(INFINITE_SCORES_FILENAME, false);
+	}
+
+	private List<Score> loadScores(final String filename,
+			final boolean useDefaults) throws IOException {
 
 		List<Score> highScores = new ArrayList<Score>();
 		InputStream inputStream = null;
 		BufferedReader bufferedReader = null;
 
 		try {
-			File scoresFile = resolveStoragePath("scores").toFile();
+			File scoresFile = resolveStoragePath(filename).toFile();
 			inputStream = new FileInputStream(scoresFile);
 			bufferedReader = new BufferedReader(new InputStreamReader(
 					inputStream, Charset.forName("UTF-8")));
 
-			logger.info("Loading user high scores.");
+			logger.info("Loading user high scores from " + filename + ".");
 
 			Score highScore = null;
 			String name = bufferedReader.readLine();
@@ -229,9 +251,11 @@ public final class FileManager {
 			}
 
 		} catch (FileNotFoundException e) {
-			// loads default if there's no user scores.
-			logger.info("Loading default high scores.");
-			highScores = loadDefaultHighScores();
+			if (useDefaults) {
+				// loads default if there's no user scores.
+				logger.info("Loading default high scores.");
+				highScores = loadDefaultHighScores();
+			}
 		} finally {
 			if (bufferedReader != null)
 				bufferedReader.close();
@@ -242,7 +266,7 @@ public final class FileManager {
 	}
 
 	/**
-	 * Saves user high scores to disk.
+	 * Saves the Campaign high scores to disk.
 	 *
 	 * @param highScores
 	 *            High scores to save.
@@ -251,11 +275,29 @@ public final class FileManager {
 	 */
 	public void saveHighScores(final List<Score> highScores)
 			throws IOException {
+		saveScores(highScores, SCORES_FILENAME);
+	}
+
+	/**
+	 * Saves the Infinite mode high scores to disk.
+	 *
+	 * @param highScores
+	 *            High scores to save.
+	 * @throws IOException
+	 *             In case of saving problems.
+	 */
+	public void saveInfiniteHighScores(final List<Score> highScores)
+			throws IOException {
+		saveScores(highScores, INFINITE_SCORES_FILENAME);
+	}
+
+	private void saveScores(final List<Score> highScores,
+			final String filename) throws IOException {
 		OutputStream outputStream = null;
 		BufferedWriter bufferedWriter = null;
 
 		try {
-			File scoresFile = resolveStoragePath("scores").toFile();
+			File scoresFile = resolveStoragePath(filename).toFile();
 
 			if (!scoresFile.exists())
 				scoresFile.createNewFile();
@@ -264,7 +306,7 @@ public final class FileManager {
 			bufferedWriter = new BufferedWriter(new OutputStreamWriter(
 					outputStream, Charset.forName("UTF-8")));
 
-			logger.info("Saving user high scores.");
+			logger.info("Saving user high scores to " + filename + ".");
 
 			// Saves 7 or fewer scores.
 			int savedCount = 0;

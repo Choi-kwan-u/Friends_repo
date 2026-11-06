@@ -109,7 +109,10 @@ public class ScoreScreen extends Screen {
 		this.selectionCooldown.reset();
 
 		try {
-			this.highScores = Core.getFileManager().loadHighScores();
+			// Each mode keeps its own high score list.
+			this.highScores = this.infiniteMode
+					? Core.getFileManager().loadInfiniteHighScores()
+					: Core.getFileManager().loadHighScores();
 			if (highScores.size() < MAX_HIGH_SCORE_NUM
 					|| highScores.get(highScores.size() - 1).getScore()
 					< this.score)
@@ -226,7 +229,10 @@ public class ScoreScreen extends Screen {
 			highScores.remove(highScores.size() - 1);
 
 		try {
-			Core.getFileManager().saveHighScores(highScores);
+			if (this.infiniteMode)
+				Core.getFileManager().saveInfiniteHighScores(highScores);
+			else
+				Core.getFileManager().saveHighScores(highScores);
 		} catch (IOException e) {
 			logger.warning("Couldn't load high scores!");
 		}
