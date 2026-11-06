@@ -17,6 +17,7 @@ import java.util.logging.Logger;
 
 import screen.Screen;
 import hud.FloatingScoreHud;
+import hud.OneUpHud;
 import currency.PermanentUpgrade;
 import currency.PlayerAssetsState;
 import currency.ShopCatalog.Category;
@@ -1668,20 +1669,26 @@ public final class DrawManager {
         }
     }
 
+    /**
+     * Draws the name input.
+     *
+     * @param heading
+     *            Line shown above the name input.
+     */
     public void drawNameInput(final Screen screen, final char[] name,
-            final int nameCharSelected) {
+            final int nameCharSelected, final String heading) {
         drawNameInputAt(screen, name, nameCharSelected, screen.getHeight()
                 / 4 + fontRegularMetrics.getHeight() * 10,
-                fontRegularMetrics.getHeight() * 2);
+                fontRegularMetrics.getHeight() * 2, heading);
     }
 
     private void drawNameInputAt(final Screen screen, final char[] name,
-            final int nameCharSelected, final int y, final int spacing) {
-        String newRecordString = "New Record!";
+            final int nameCharSelected, final int y, final int spacing,
+            final String heading) {
         String introduceNameString = "Introduce name:";
 
         backBufferGraphics.setColor(Color.GREEN);
-        drawCenteredRegularString(screen, newRecordString, y);
+        drawCenteredRegularString(screen, heading, y);
         backBufferGraphics.setColor(Color.WHITE);
         drawCenteredRegularString(screen, introduceNameString, y + spacing);
 
@@ -1735,14 +1742,21 @@ public final class DrawManager {
             final boolean gameCleared) {
         drawAchievementResults(screen, score, lives, enemies, accuracy,
                 isNewRecord, name, selected, achievements, acceptsInput,
-                failedStage, gameCleared, null);
+                failedStage, gameCleared, null, "New Record!");
     }
 
+    /**
+     * Draws the results with achievements.
+     *
+     * @param recordHeading
+     *            Line shown above the name input.
+     */
     public void drawAchievementResults(final Screen screen, final int score,
             final int lives, final int enemies, final float accuracy,
             final boolean isNewRecord, final char[] name, final int selected,
             final List<Achievement> achievements, final boolean acceptsInput,
-            final int failedStage, final boolean gameCleared, final String modeLabel) {
+            final int failedStage, final boolean gameCleared, final String modeLabel,
+            final String recordHeading) {
         int spacing = fontRegularMetrics.getHeight();
         int y = getAchievementResultsTitleY(screen, isNewRecord, failedStage,
                 achievements.size());
@@ -1766,7 +1780,7 @@ public final class DrawManager {
         }
         if (isNewRecord) {
             y += spacing;
-            drawNameInputAt(screen, name, selected, y, spacing);
+            drawNameInputAt(screen, name, selected, y, spacing, recordHeading);
             y += spacing * 3;
         }
         y += spacing;
@@ -2053,6 +2067,13 @@ public final class DrawManager {
     public void drawFloatingScores(final FloatingScoreHud hud, final Screen screen) {
         hud.draw((java.awt.Graphics2D) backBufferGraphics,
                 screen.getWidth(), screen.getHeight());
+    }
+
+    /** Draws the "+1UP" popups of the Infinite mode extra lives. */
+    public void drawOneUps(final OneUpHud hud, final Screen screen) {
+        hud.draw((java.awt.Graphics2D) backBufferGraphics,
+                screen.getWidth(), screen.getHeight(),
+                fontRegular.deriveFont(OneUpHud.FONT_SIZE));
     }
 
     /**

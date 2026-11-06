@@ -161,6 +161,17 @@ public class EnemyShip extends Entity {
 	}
 
 	/**
+	 * Setter for the score bonus, for enemies whose value does not come from
+	 * their sprite.
+	 *
+	 * @param pointValue
+	 *            Value of the ship.
+	 */
+	protected final void setPointValue(final int pointValue) {
+		this.pointValue = pointValue;
+	}
+
+	/**
 	 * Moves the ship the specified distance.
 	 *
 	 * @param distanceX

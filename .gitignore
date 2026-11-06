@@ -174,6 +174,7 @@ pip-log.txt
 # Local compile output and personal high scores
 /out/
 /scores
+/scores_infinite
 /player_assets.properties
 /player_assets.properties.*
 

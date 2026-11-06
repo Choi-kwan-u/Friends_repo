@@ -33,8 +33,12 @@ import entity.Grenade;
 import entity.GrenadeFragment;
 import entity.Ship;
 import entity.ZigzagEnemyShip;
+import entity.ZigzagEnemyShip.Pattern;
+import vfx.Icon;
+import hud.OneUpHud;
 import entity.item.BuffHud;
 import entity.item.ClusterGrenadeItem;
+import entity.item.ExtraLifeItem;
 import entity.item.Hyperfire;
 import entity.item.Item;
 import entity.item.ItemManager;
@@ -60,6 +64,32 @@ public class InfiniteGameScreen extends Screen {
 	private static final int SCREEN_CHANGE_INTERVAL = 1500;
 	private static final int ENEMY_BULLET_SPEED = 4;
 	private static final double ENEMY_FIRE_CHANCE = 0.003;
+	/** Chance per frame that a B-type enemy fires its three-way spread. */
+	private static final double SPREAD_FIRE_CHANCE = 0.002;
+	/** Sideways speed of the side bullets of a spread. */
+	private static final int SPREAD_SPEED_X = 2;
+	/*
+	 * Spawn table for one roll in [0, 1): charger 10%, formation 10%, then a
+	 * single enemy.
+	 */
+	static final double CHARGER_LIMIT = 0.10;
+	static final double FORMATION_LIMIT = 0.20;
+	/** Enemies in one formation. */
+	static final int FORMATION_SIZE = 5;
+	/** Horizontal distance between two enemies of a formation. */
+	private static final int FORMATION_SPACING = 40;
+	/** Vertical step between the rows of a V formation. */
+	private static final int FORMATION_V_STEP = 20;
+	/** The spawn interval after a formation is this many times longer. */
+	private static final int FORMATION_INTERVAL_FACTOR = 2;
+	/** Frames a warning charger stays shown or hidden while blinking. */
+	private static final int CHARGE_BLINK_FRAMES = 6;
+	/** Score step between two extra life drops. */
+	static final int EXTRA_LIFE_SCORE_STEP = 1000;
+	/** Most lives the player can hold in this mode. */
+	static final int MAX_LIVES = 5;
+	/** Blink half-period of the invulnerable ship, in milliseconds. */
+	static final long INVULNERABLE_BLINK_PERIOD = 100;
 
 	/*
 	 * Drop table for one roll in [0, 1): Energy Shield 10%, Hyperfire 15%,
@@ -131,6 +161,12 @@ public class InfiniteGameScreen extends Screen {
 	private long annihilatorCooldownUntil;
 	/** Time the space key started being held, 0 if not held. */
 	private long spaceHeldSince;
+	/** Hearts falling toward the player. */
+	private List<ExtraLifeItem> lifeItems;
+	/** Score at which the next heart drops. */
+	private int nextLifeScore;
+	/** "+1UP" popups shown when a heart gives a life. */
+	private OneUpHud oneUpHud;
 	/** Best saved Infinite mode score, 0 if there is none yet. */
 	private int bestInfiniteScore;
 
@@ -182,6 +218,10 @@ public class InfiniteGameScreen extends Screen {
 		this.lastCountdown = -1;
 		this.inputDelay = Core.getCooldown(INPUT_DELAY);
 		this.bestInfiniteScore = loadBestInfiniteScore();
+		this.lifeItems = new ArrayList<ExtraLifeItem>();
+		this.oneUpHud = new OneUpHud();
+		this.nextLifeScore = (this.score / EXTRA_LIFE_SCORE_STEP + 1)
+				* EXTRA_LIFE_SCORE_STEP;
 		this.inputDelay.reset();
 
 		AudioManager.playBGM("audio/bgm/music_game.wav");
@@ -240,6 +280,7 @@ public class InfiniteGameScreen extends Screen {
 			this.itemManager.update(this.ship);
 			if (!this.ship.isDestroyed())
 				this.itemManager.checkCollisions(this.ship);
+			updateLifeItems();
 		}
 
 		manageCollisions();
@@ -380,6 +421,59 @@ public class InfiniteGameScreen extends Screen {
 				enemy.getPositionY() + enemy.getHeight() / 2);
 		countAnnihilatorKill();
 		tryDropItem(enemy);
+		tryDropExtraLife();
+	}
+
+	/**
+	 * Drops one heart from the top of the screen, at a random X, for each
+	 * score step reached.
+	 */
+	private void tryDropExtraLife() {
+		while (this.score >= this.nextLifeScore) {
+			int heartWidth = Icon.LIFE.getWidth() * ExtraLifeItem.SCALE;
+			int maxX = this.width - SIDE_MARGIN - heartWidth;
+			int positionX = SIDE_MARGIN
+					+ (int) (Math.random() * (maxX - SIDE_MARGIN));
+			this.lifeItems.add(new ExtraLifeItem(positionX,
+					SEPARATION_LINE_HEIGHT));
+			this.nextLifeScore += EXTRA_LIFE_SCORE_STEP;
+		}
+	}
+
+	/** Moves the hearts and gives a life for each one the ship catches. */
+	private void updateLifeItems() {
+		Iterator<ExtraLifeItem> iterator = this.lifeItems.iterator();
+		while (iterator.hasNext()) {
+			ExtraLifeItem heart = iterator.next();
+			heart.update();
+			if (heart.getPositionY() > this.height) {
+				iterator.remove();
+			} else if (!this.ship.isDestroyed()
+					&& checkCollision(heart, this.ship)) {
+				iterator.remove();
+				AudioManager.playSFX("audio/sfx/item_pickup.wav");
+				if (gainLife())
+					this.oneUpHud.show(
+							this.ship.getPositionX() + this.ship.getWidth() / 2,
+							this.ship.getPositionY() - 6);
+			}
+		}
+	}
+
+	/**
+	 * Adds a life, up to MAX_LIVES.
+	 *
+	 * @return True if a life was added.
+	 */
+	boolean gainLife() {
+		if (this.lives >= MAX_LIVES)
+			return false;
+		this.lives++;
+		// Out of danger: back to the normal music.
+		if (this.lives == 2)
+			AudioManager.playBGM("audio/bgm/music_game.wav");
+		this.logger.info("Extra life, " + this.lives + " lives remaining.");
+		return true;
 	}
 
 	/** Rolls the drop table for a destroyed enemy. */
@@ -482,54 +576,167 @@ public class InfiniteGameScreen extends Screen {
 		if (!this.spawnCooldown.checkFinished())
 			return;
 
-		int amplitude = ZigzagEnemyShip.getZigzagAmplitude();
-		int minX = SIDE_MARGIN + amplitude;
-		int maxX = this.width - SIDE_MARGIN - amplitude - ENEMY_WIDTH;
-		int positionX = minX + (int) (Math.random() * (maxX - minX));
-
-		SpriteType spriteType;
-		double roll = Math.random();
-		if (roll < 0.2)
-			spriteType = SpriteType.EnemyShipC1;
-		else if (roll < 0.6)
-			spriteType = SpriteType.EnemyShipB1;
-		else
-			spriteType = SpriteType.EnemyShipA1;
-
-		int fallSpeed = Math.min(MAXIMUM_FALL_SPEED,
-				1 + this.shipsDestroyed / KILLS_PER_SPEED_UP);
-
-		this.enemies.add(new ZigzagEnemyShip(positionX,
-				SEPARATION_LINE_HEIGHT, spriteType, fallSpeed));
+		boolean formation = spawnFromRoll(Math.random());
 
 		int interval = Math.max(MINIMUM_SPAWN_INTERVAL, INITIAL_SPAWN_INTERVAL
 				- this.shipsDestroyed * SPAWN_INTERVAL_STEP);
+		// A formation brings several enemies at once: wait longer after it.
+		if (formation)
+			interval *= FORMATION_INTERVAL_FACTOR;
 		this.spawnCooldown = Core.getCooldown(interval);
 		this.spawnCooldown.reset();
 	}
 
+	/**
+	 * Spawns what one roll in [0, 1) picks: a charger, a formation, or a
+	 * single enemy whose type sets its movement and attack.
+	 *
+	 * @return True if a formation was spawned.
+	 */
+	boolean spawnFromRoll(final double roll) {
+		int fallSpeed = Math.min(MAXIMUM_FALL_SPEED,
+				1 + this.shipsDestroyed / KILLS_PER_SPEED_UP);
+
+		if (roll < CHARGER_LIMIT) {
+			this.enemies.add(ZigzagEnemyShip.charger(
+					randomSpawnX(Pattern.CHARGER, 0), SEPARATION_LINE_HEIGHT,
+					fallSpeed, this.height / 3));
+			return false;
+		}
+		if (roll < FORMATION_LIMIT) {
+			spawnFormation(fallSpeed, Math.random() < 0.5);
+			return true;
+		}
+
+		// Single enemy: C 20%, B 40%, A 40% of the remaining rolls.
+		double typeRoll = (roll - FORMATION_LIMIT) / (1 - FORMATION_LIMIT);
+		SpriteType spriteType;
+		Pattern pattern;
+		if (typeRoll < 0.2) {
+			spriteType = SpriteType.EnemyShipC1;
+			pattern = Pattern.WAVE;
+		} else if (typeRoll < 0.6) {
+			spriteType = SpriteType.EnemyShipB1;
+			pattern = Pattern.STRAIGHT;
+		} else {
+			spriteType = SpriteType.EnemyShipA1;
+			pattern = Pattern.ZIGZAG;
+		}
+		this.enemies.add(new ZigzagEnemyShip(randomSpawnX(pattern, 0),
+				SEPARATION_LINE_HEIGHT, spriteType, fallSpeed, pattern,
+				Math.random() < 0.5 ? 1 : -1));
+		return false;
+	}
+
+	/**
+	 * Spawns FORMATION_SIZE zigzagging A-type enemies that keep their shape:
+	 * a horizontal line, or a V with its center in front.
+	 */
+	private void spawnFormation(final int fallSpeed, final boolean vShape) {
+		int span = (FORMATION_SIZE - 1) * FORMATION_SPACING;
+		int leftX = randomSpawnX(Pattern.ZIGZAG, span);
+		int direction = Math.random() < 0.5 ? 1 : -1;
+		int middle = FORMATION_SIZE / 2;
+		for (int i = 0; i < FORMATION_SIZE; i++) {
+			int offsetY = vShape
+					? (middle - Math.abs(i - middle)) * FORMATION_V_STEP : 0;
+			this.enemies.add(new ZigzagEnemyShip(
+					leftX + i * FORMATION_SPACING,
+					SEPARATION_LINE_HEIGHT + offsetY, SpriteType.EnemyShipA1,
+					fallSpeed, Pattern.ZIGZAG, direction));
+		}
+	}
+
+	/**
+	 * Picks a spawn X so the pattern never swings off screen.
+	 *
+	 * @param extraWidth
+	 *            Extra width to the right (a formation's span).
+	 */
+	private int randomSpawnX(final Pattern pattern, final int extraWidth) {
+		int amplitude = ZigzagEnemyShip.getAmplitude(pattern);
+		int minX = SIDE_MARGIN + amplitude;
+		int maxX = this.width - SIDE_MARGIN - amplitude - ENEMY_WIDTH
+				- extraWidth;
+		return minX + (int) (Math.random() * Math.max(1, maxX - minX));
+	}
+
 	private void moveEnemies() {
+		int targetX = this.ship.getPositionX() + this.ship.getWidth() / 2;
+		int targetY = this.ship.getPositionY() + this.ship.getHeight() / 2;
 		Iterator<ZigzagEnemyShip> iterator = this.enemies.iterator();
 		while (iterator.hasNext()) {
 			ZigzagEnemyShip enemy = iterator.next();
-			enemy.zigzagMove();
+			enemy.advance(targetX, targetY);
 			enemy.update();
-			if (enemy.getPositionY() > this.height)
+			// A dashing charger can also leave through a side.
+			if (enemy.getPositionY() > this.height
+					|| enemy.getPositionX() < -enemy.getWidth()
+					|| enemy.getPositionX() > this.width)
 				iterator.remove();
 		}
 	}
 
 	private void shootEnemies() {
-		for (ZigzagEnemyShip enemy : this.enemies) {
-			if (Math.random() < ENEMY_FIRE_CHANCE) {
-				this.enemyBullets.add(BulletPool.getBullet(
-						enemy.getPositionX() + enemy.getWidth() / 2,
-						enemy.getPositionY() + enemy.getHeight(),
-						getEnemyBulletSpeed()));
-				// Same enemy shot sound as the Campaign formation.
-				AudioManager.playSFX("audio/sfx/enemy_shoot.wav");
-			}
+		for (ZigzagEnemyShip enemy : this.enemies)
+			if (Math.random() < fireChance(enemy.getPattern()))
+				fireEnemy(enemy);
+	}
+
+	/** Chance per frame that an enemy with this pattern shoots. */
+	static double fireChance(final Pattern pattern) {
+		switch (pattern) {
+		case STRAIGHT:
+			return SPREAD_FIRE_CHANCE;
+		case CHARGER:
+			return 0;
+		default:
+			return ENEMY_FIRE_CHANCE;
 		}
+	}
+
+	/**
+	 * Fires the shot of the enemy's type: A straight down, B a three-way
+	 * spread, C aimed at the player. Chargers do not shoot.
+	 */
+	void fireEnemy(final ZigzagEnemyShip enemy) {
+		int x = enemy.getPositionX() + enemy.getWidth() / 2;
+		int y = enemy.getPositionY() + enemy.getHeight();
+		int speed = getEnemyBulletSpeed();
+
+		switch (enemy.getPattern()) {
+		case CHARGER:
+			return;
+		case STRAIGHT:
+			for (int speedX = -SPREAD_SPEED_X; speedX <= SPREAD_SPEED_X;
+					speedX += SPREAD_SPEED_X)
+				addEnemyBullet(x, y, speed, speedX);
+			break;
+		case WAVE:
+			addEnemyBullet(x, y, speed, aimedSpeedX(x, y, speed));
+			break;
+		default:
+			addEnemyBullet(x, y, speed, 0);
+			break;
+		}
+		// Same enemy shot sound as the Campaign formation.
+		AudioManager.playSFX("audio/sfx/enemy_shoot.wav");
+	}
+
+	/** Sideways speed that sends a bullet from (x, y) toward the player. */
+	private int aimedSpeedX(final int x, final int y, final int speed) {
+		int dx = this.ship.getPositionX() + this.ship.getWidth() / 2 - x;
+		int dy = this.ship.getPositionY() - y;
+		if (dy <= 0)
+			return 0;
+		int speedX = (int) Math.round(dx / (double) dy * speed);
+		return Math.max(-speed, Math.min(speed, speedX));
+	}
+
+	private void addEnemyBullet(final int x, final int y, final int speedY,
+			final int speedX) {
+		this.enemyBullets.add(BulletPool.getBullet(x, y, speedY, speedX,
+				Bullet.Owner.ENEMY));
 	}
 
 	private void draw() {
@@ -541,14 +748,20 @@ public class InfiniteGameScreen extends Screen {
 					this.annihilator.isFiring(),
 					this.annihilator.getChargeProgress());
 
-		drawManager.drawEntity(this.ship, this.ship.getPositionX(),
-				this.ship.getPositionY());
+		if (isShipVisible(System.currentTimeMillis()))
+			drawManager.drawEntity(this.ship, this.ship.getPositionX(),
+					this.ship.getPositionY());
 		if (this.ship.isShieldActive() && !this.ship.isDestroyed())
 			drawManager.drawShield(this, this.ship);
 
-		for (ZigzagEnemyShip enemy : this.enemies)
+		for (ZigzagEnemyShip enemy : this.enemies) {
+			// A charger about to dash blinks as a warning.
+			if (enemy.isChargeWarning()
+					&& (enemy.getWarningFrame() / CHARGE_BLINK_FRAMES) % 2 == 1)
+				continue;
 			drawManager.drawEntity(enemy, enemy.getPositionX(),
 					enemy.getPositionY());
+		}
 
 		for (Bullet bullet : this.bullets)
 			drawManager.drawEntity(bullet, bullet.getPositionX(),
@@ -563,6 +776,10 @@ public class InfiniteGameScreen extends Screen {
 		for (GrenadeFragment fragment : this.fragments)
 			drawManager.drawGrenadeFragment(fragment);
 		this.itemManager.draw(drawManager);
+		for (ExtraLifeItem heart : this.lifeItems)
+			drawManager.drawIcon(Icon.LIFE, heart.getPositionX(),
+					heart.getPositionY(), ExtraLifeItem.SCALE);
+		drawManager.drawOneUps(this.oneUpHud, this);
 
 		drawManager.drawScore(this, this.score);
 		drawManager.drawInfiniteHighScore(this, this.bestInfiniteScore,
@@ -598,6 +815,16 @@ public class InfiniteGameScreen extends Screen {
 					this.height / 2 + this.height / 12);
 		}
 		drawManager.completeDrawing(this);
+	}
+
+	/**
+	 * The ship blinks while it is invulnerable after a hit, once it can move
+	 * again. While stunned it is always drawn.
+	 */
+	boolean isShipVisible(final long now) {
+		if (this.ship.isDestroyed() || !this.ship.isInvulnerable())
+			return true;
+		return (now / INVULNERABLE_BLINK_PERIOD) % 2 == 0;
 	}
 
 	/** Reads the top saved Infinite score; 0 when none can be read. */
@@ -662,7 +889,10 @@ public class InfiniteGameScreen extends Screen {
 		Set<Bullet> recyclableEnemy = new HashSet<Bullet>();
 		for (Bullet bullet : this.enemyBullets) {
 			bullet.update();
-			if (bullet.getPositionY() > this.height)
+			// Spread and aimed shots can also leave through a side.
+			if (bullet.getPositionY() > this.height
+					|| bullet.getPositionX() < -bullet.getWidth()
+					|| bullet.getPositionX() > this.width)
 				recyclableEnemy.add(bullet);
 		}
 		this.enemyBullets.removeAll(recyclableEnemy);
@@ -688,7 +918,9 @@ public class InfiniteGameScreen extends Screen {
 		this.bullets.removeAll(recyclable);
 		BulletPool.recycle(recyclable);
 
-		if (this.gameOver || this.ship.isDestroyed())
+		// After a hit the ship cannot be hit again for the whole recovery
+		// (2 s), not only while it is stunned (1 s).
+		if (this.gameOver || this.ship.isInvulnerable())
 			return;
 
 		Iterator<Bullet> bulletIterator = this.enemyBullets.iterator();

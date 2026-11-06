@@ -13,6 +13,7 @@ import entity.BulletPool;
 import entity.Ship;
 import entity.ZigzagEnemyShip;
 import entity.item.ClusterGrenadeItem;
+import entity.item.ExtraLifeItem;
 import entity.item.Hyperfire;
 import entity.item.Item;
 import entity.item.ItemManager;
@@ -33,6 +34,8 @@ public final class InfiniteGameScreenItemsTest {
         checkKillsDoNotCountDuringCooldown();
         checkShieldBlocksEnemyBullet();
         checkNewRecordOnlyAboveTheBestScore();
+        checkInvulnerableForTwoSecondsAfterAHit();
+        checkExtraLifeEveryThousandPoints();
         System.out.println("Infinite Mode item checks passed.");
     }
 
@@ -178,6 +181,104 @@ public final class InfiniteGameScreenItemsTest {
         field("score").setInt(screen, 10);
         check(screen.isBeatingHighScore(),
                 "Without records, the first points are a record");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void checkInvulnerableForTwoSecondsAfterAHit()
+            throws Exception {
+        InfiniteGameScreen screen = screen();
+        Ship ship = (Ship) field("ship").get(screen);
+        Set<Bullet> enemyBullets = (Set<Bullet>) field("enemyBullets").get(screen);
+        Method manageCollisions =
+                InfiniteGameScreen.class.getDeclaredMethod("manageCollisions");
+        manageCollisions.setAccessible(true);
+
+        enemyBullets.add(bulletOn(ship));
+        manageCollisions.invoke(screen);
+        check(screen.getGameState().getLivesRemaining() == 2,
+                "First hit should cost a life");
+        check(screen.isShipVisible(InfiniteGameScreen.INVULNERABLE_BLINK_PERIOD),
+                "Stunned ship should not blink");
+
+        // Stun over (1.5 s ago), recovery still running.
+        startedAgo(ship, "destructionCooldown", 1500);
+        startedAgo(ship, "invulnerabilityCooldown", 1500);
+        check(!ship.isDestroyed() && ship.isInvulnerable(),
+                "Ship should be free to move but still invulnerable");
+        enemyBullets.add(bulletOn(ship));
+        manageCollisions.invoke(screen);
+        check(screen.getGameState().getLivesRemaining() == 2,
+                "A hit during the recovery cost a life");
+        check(screen.isShipVisible(0)
+                && !screen.isShipVisible(InfiniteGameScreen.INVULNERABLE_BLINK_PERIOD),
+                "Invulnerable ship should blink");
+
+        // Recovery over (2.5 s ago): hits land again.
+        startedAgo(ship, "invulnerabilityCooldown", 2500);
+        check(screen.isShipVisible(InfiniteGameScreen.INVULNERABLE_BLINK_PERIOD),
+                "Ship should stop blinking after its recovery");
+        manageCollisions.invoke(screen);
+        check(screen.getGameState().getLivesRemaining() == 1,
+                "A hit after the recovery should cost a life");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void checkExtraLifeEveryThousandPoints() throws Exception {
+        InfiniteGameScreen screen = screen();
+        screen.itemDropRandom = alwaysRoll(0.99);
+        List<ExtraLifeItem> hearts =
+                (List<ExtraLifeItem>) field("lifeItems").get(screen);
+
+        field("score").setInt(screen, 980);
+        screen.destroyEnemy(enemy(50));
+        check(hearts.isEmpty(), "Heart dropped before 1000 points");
+        screen.destroyEnemy(enemy(50));
+        check(hearts.size() == 1, "No heart at 1000 points");
+        check(hearts.get(0).getPositionY() == 40,
+                "Heart should fall from the top of the screen");
+        screen.destroyEnemy(enemy(50));
+        check(hearts.size() == 1, "Second heart before 2000 points");
+
+        // One kill crossing two steps (2000 and 3000) drops two hearts.
+        field("score").setInt(screen, 2995);
+        screen.destroyEnemy(enemy(50));
+        check(hearts.size() == 3, "Each crossed step should drop a heart");
+
+        // Catching a heart gives a life.
+        Ship ship = (Ship) field("ship").get(screen);
+        hearts.clear();
+        hearts.add(new ExtraLifeItem(ship.getPositionX(), ship.getPositionY()));
+        Method update =
+                InfiniteGameScreen.class.getDeclaredMethod("updateLifeItems");
+        update.setAccessible(true);
+        update.invoke(screen);
+        check(hearts.isEmpty(), "Caught heart was not removed");
+        check(screen.getGameState().getLivesRemaining() == 4,
+                "Caught heart should give a life");
+        hud.OneUpHud oneUps = (hud.OneUpHud) field("oneUpHud").get(screen);
+        check(oneUps.size() == 1, "Caught heart should show +1UP");
+
+        screen.gainLife();
+        check(screen.getGameState().getLivesRemaining() == 5,
+                "Fifth life should be given");
+        check(!screen.gainLife() && screen.getGameState().getLivesRemaining()
+                == InfiniteGameScreen.MAX_LIVES, "Lives should stop at 5");
+    }
+
+    private static Bullet bulletOn(final Ship ship) {
+        return BulletPool.getBullet(ship.getPositionX() + ship.getWidth() / 2,
+                ship.getPositionY() + ship.getHeight() / 2, 4);
+    }
+
+    /** Moves a cooldown of the ship back in time. */
+    private static void startedAgo(final Ship ship, final String name,
+            final long millis) throws Exception {
+        Field cooldownField = Ship.class.getDeclaredField(name);
+        cooldownField.setAccessible(true);
+        Object cooldown = cooldownField.get(ship);
+        Field time = cooldown.getClass().getDeclaredField("time");
+        time.setAccessible(true);
+        time.setLong(cooldown, System.currentTimeMillis() - millis);
     }
 
     private static InfiniteGameScreen screen() {
