@@ -84,6 +84,10 @@ public class InfiniteGameScreen extends Screen {
 	private static final int FORMATION_INTERVAL_FACTOR = 2;
 	/** Frames a warning charger stays shown or hidden while blinking. */
 	private static final int CHARGE_BLINK_FRAMES = 6;
+	/** Survival points per second, multiplied by the speed level. */
+	static final int SURVIVAL_POINTS_PER_LEVEL = 5;
+	/** Time between two survival point gains, in milliseconds. */
+	static final long SURVIVAL_TICK = 1000;
 	/** Score step between two extra life drops. */
 	static final int EXTRA_LIFE_SCORE_STEP = 1000;
 	/** Most lives the player can hold in this mode. */
@@ -161,6 +165,8 @@ public class InfiniteGameScreen extends Screen {
 	private long annihilatorCooldownUntil;
 	/** Time the space key started being held, 0 if not held. */
 	private long spaceHeldSince;
+	/** Time of the last survival points, 0 before the run starts. */
+	private long lastSurvivalTick;
 	/** Hearts falling toward the player. */
 	private List<ExtraLifeItem> lifeItems;
 	/** Score at which the next heart drops. */
@@ -266,6 +272,7 @@ public class InfiniteGameScreen extends Screen {
 				return;
 			}
 
+			updateSurvivalScore(System.currentTimeMillis());
 			updatePlayerControls();
 			updateAnnihilatorControls();
 			spawnEnemy();
@@ -412,7 +419,7 @@ public class InfiniteGameScreen extends Screen {
 	 * grenade fragment or Annihilator beam). The caller removes the enemy.
 	 */
 	void destroyEnemy(final ZigzagEnemyShip enemy) {
-		this.score += enemy.getPointValue();
+		addScore(enemy.getPointValue());
 		this.shipsDestroyed++;
 		recordEnemyDefeat(enemy);
 		AudioManager.playSFX("audio/sfx/enemy_explosion.wav");
@@ -421,7 +428,34 @@ public class InfiniteGameScreen extends Screen {
 				enemy.getPositionY() + enemy.getHeight() / 2);
 		countAnnihilatorKill();
 		tryDropItem(enemy);
+	}
+
+	/** Adds points; every score gain goes through here for the hearts. */
+	private void addScore(final int points) {
+		this.score += points;
 		tryDropExtraLife();
+	}
+
+	/** Speed level of the run: 1 + kills / 20, at most 3. */
+	int getSpeedLevel() {
+		return Math.min(MAXIMUM_FALL_SPEED,
+				1 + this.shipsDestroyed / KILLS_PER_SPEED_UP);
+	}
+
+	/**
+	 * Gives level x SURVIVAL_POINTS_PER_LEVEL points for each second
+	 * survived. Called only while the run is active (after the countdown,
+	 * before game over).
+	 */
+	void updateSurvivalScore(final long now) {
+		if (this.lastSurvivalTick == 0) {
+			this.lastSurvivalTick = now;
+			return;
+		}
+		while (now - this.lastSurvivalTick >= SURVIVAL_TICK) {
+			this.lastSurvivalTick += SURVIVAL_TICK;
+			addScore(getSpeedLevel() * SURVIVAL_POINTS_PER_LEVEL);
+		}
 	}
 
 	/**
@@ -594,8 +628,7 @@ public class InfiniteGameScreen extends Screen {
 	 * @return True if a formation was spawned.
 	 */
 	boolean spawnFromRoll(final double roll) {
-		int fallSpeed = Math.min(MAXIMUM_FALL_SPEED,
-				1 + this.shipsDestroyed / KILLS_PER_SPEED_UP);
+		int fallSpeed = getSpeedLevel();
 
 		if (roll < CHARGER_LIMIT) {
 			this.enemies.add(ZigzagEnemyShip.charger(

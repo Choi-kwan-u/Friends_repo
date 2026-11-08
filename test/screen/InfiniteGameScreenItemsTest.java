@@ -36,6 +36,7 @@ public final class InfiniteGameScreenItemsTest {
         checkNewRecordOnlyAboveTheBestScore();
         checkInvulnerableForTwoSecondsAfterAHit();
         checkExtraLifeEveryThousandPoints();
+        checkSurvivalPointsByLevel();
         System.out.println("Infinite Mode item checks passed.");
     }
 
@@ -263,6 +264,40 @@ public final class InfiniteGameScreenItemsTest {
                 "Fifth life should be given");
         check(!screen.gainLife() && screen.getGameState().getLivesRemaining()
                 == InfiniteGameScreen.MAX_LIVES, "Lives should stop at 5");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void checkSurvivalPointsByLevel() throws Exception {
+        InfiniteGameScreen screen = screen();
+        Field kills = field("shipsDestroyed");
+
+        screen.updateSurvivalScore(10_000);
+        check(score(screen) == 0, "The first call only starts the timer");
+        screen.updateSurvivalScore(10_999);
+        check(score(screen) == 0, "Points before a full second");
+        screen.updateSurvivalScore(11_000);
+        check(score(screen) == 5, "Level 1 should give 5 points a second");
+
+        kills.setInt(screen, 20);
+        check(screen.getSpeedLevel() == 2, "20 kills should be level 2");
+        screen.updateSurvivalScore(12_000);
+        check(score(screen) == 15, "Level 2 should give 10 points a second");
+
+        kills.setInt(screen, 100);
+        check(screen.getSpeedLevel() == 3, "Level should stop at 3");
+        screen.updateSurvivalScore(14_000);
+        check(score(screen) == 45, "Level 3 should give 15 points a second");
+
+        // Survival points reaching 1000 drop a heart too.
+        List<ExtraLifeItem> hearts =
+                (List<ExtraLifeItem>) field("lifeItems").get(screen);
+        field("score").setInt(screen, 990);
+        screen.updateSurvivalScore(15_000);
+        check(hearts.size() == 1, "Survival points to 1000 should drop a heart");
+    }
+
+    private static int score(final InfiniteGameScreen screen) {
+        return screen.getGameState().getScore();
     }
 
     private static Bullet bulletOn(final Ship ship) {
