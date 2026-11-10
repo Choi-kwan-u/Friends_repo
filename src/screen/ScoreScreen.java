@@ -28,6 +28,9 @@ public class ScoreScreen extends Screen {
 	private static final int SELECTION_TIME = 200;
 	/** Maximum number of high scores. */
 	private static final int MAX_HIGH_SCORE_NUM = 7;
+	/** Heading when the score enters the list without beating the best. */
+	static final String RANK_IN_HEADING = "Rank In!";
+	static final String NEW_RECORD_HEADING = "New Record!";
 	/** Code of first mayus character. */
 	private static final int FIRST_CHAR = 65;
 	/** Code of last mayus character. */
@@ -56,6 +59,8 @@ public class ScoreScreen extends Screen {
 	private List<Score> highScores;
 	/** Checks if current score is a new high score. */
 	private boolean isNewRecord;
+	/** True if the score beats the best saved one. */
+	private boolean beatsTopScore;
 	/** Player name for record input. */
 	private char[] name;
 	/** Character of players name selected for change. */
@@ -109,11 +114,16 @@ public class ScoreScreen extends Screen {
 		this.selectionCooldown.reset();
 
 		try {
-			this.highScores = Core.getFileManager().loadHighScores();
+			// Each mode keeps its own high score list.
+			this.highScores = this.infiniteMode
+					? Core.getFileManager().loadInfiniteHighScores()
+					: Core.getFileManager().loadHighScores();
 			if (highScores.size() < MAX_HIGH_SCORE_NUM
 					|| highScores.get(highScores.size() - 1).getScore()
 					< this.score)
 				this.isNewRecord = true;
+			int best = highScores.isEmpty() ? 0 : highScores.get(0).getScore();
+			this.beatsTopScore = this.score > best;
 
 		} catch (IOException e) {
 			logger.warning("Couldn't load high scores!");
@@ -217,6 +227,14 @@ public class ScoreScreen extends Screen {
 	}
 
 	/**
+	 * Heading above the name input: "New Record!" when the best score is
+	 * beaten, "Rank In!" when the score only enters the list.
+	 */
+	String getRecordHeading() {
+		return this.beatsTopScore ? NEW_RECORD_HEADING : RANK_IN_HEADING;
+	}
+
+	/**
 	 * Saves the score as a high score.
 	 */
 	private void saveScore() {
@@ -226,7 +244,10 @@ public class ScoreScreen extends Screen {
 			highScores.remove(highScores.size() - 1);
 
 		try {
-			Core.getFileManager().saveHighScores(highScores);
+			if (this.infiniteMode)
+				Core.getFileManager().saveInfiniteHighScores(highScores);
+			else
+				Core.getFileManager().saveHighScores(highScores);
 		} catch (IOException e) {
 			logger.warning("Couldn't load high scores!");
 		}
@@ -250,7 +271,7 @@ public class ScoreScreen extends Screen {
                     this.shipsDestroyed,accuracy,this.isNewRecord,this.name,this.nameCharSelected,
                     this.runUnlocks,this.inputDelay.checkFinished(),
                     this.stageFailed && !this.infiniteMode ? this.level : 0, this.gameCleared,
-                    this.modeLabel);
+                    this.modeLabel, getRecordHeading());
             drawManager.completeDrawing(this); return;
         }
 
@@ -263,7 +284,8 @@ public class ScoreScreen extends Screen {
         drawManager.drawModeLabel(this, this.modeLabel, this.isNewRecord);
 
 		if (this.isNewRecord)
-			drawManager.drawNameInput(this, this.name, this.nameCharSelected);
+			drawManager.drawNameInput(this, this.name, this.nameCharSelected,
+					getRecordHeading());
 
 		drawManager.completeDrawing(this);
 	}

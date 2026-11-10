@@ -2,21 +2,25 @@ package screen;
 
 import java.awt.event.KeyEvent;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import engine.Core;
 import engine.Score;
 import audio.AudioManager;
 /**
- * Implements the high scores screen, it shows player records.
+ * Implements the high scores screen, it shows player records: Campaign on
+ * the left, Infinite mode on the right.
  *
  * @author <a href="mailto:RobertoIA1987@gmail.com">Roberto Izquierdo Amo</a>
  *
  */
 public class HighScoreScreen extends Screen {
 
-	/** List of past high scores. */
+	/** List of past Campaign high scores. */
 	private List<Score> highScores;
+	/** List of past Infinite mode high scores. */
+	private List<Score> infiniteHighScores;
 
 	/**
 	 * Constructor, establishes the properties of the screen.
@@ -37,6 +41,13 @@ public class HighScoreScreen extends Screen {
 			this.highScores = Core.getFileManager().loadHighScores();
 		} catch (NumberFormatException | IOException e) {
 			logger.warning("Couldn't load high scores!");
+		}
+		try {
+			this.infiniteHighScores =
+					Core.getFileManager().loadInfiniteHighScores();
+		} catch (NumberFormatException | IOException e) {
+			logger.warning("Couldn't load Infinite mode high scores!");
+			this.infiniteHighScores = new ArrayList<Score>();
 		}
 
 		AudioManager.playBGM("audio/bgm/music_menu.wav");
@@ -77,7 +88,8 @@ public class HighScoreScreen extends Screen {
 		drawManager.initDrawing(this);
 
 		drawManager.drawHighScoreMenu(this);
-		drawManager.drawHighScores(this, this.highScores);
+		drawManager.drawHighScores(this, this.highScores,
+				this.infiniteHighScores);
 
 		drawManager.completeDrawing(this);
 	}
