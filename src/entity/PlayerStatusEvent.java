@@ -32,7 +32,9 @@ public final class PlayerStatusEvent implements GameplayEvent {
 		/** An active movement slow was refreshed. */
 		SLOW_REFRESHED("PlayerSlowRefreshed"),
 		/** A movement slow ended or was cleared. */
-		SLOW_ENDED("PlayerSlowEnded");
+		SLOW_ENDED("PlayerSlowEnded"),
+		/** A paid revive restored lives from zero to half the maximum. */
+		REVIVED("PlayerRevived");
 
 		/** Name of the event as written in the log. */
 		private final String eventName;
@@ -87,6 +89,10 @@ public final class PlayerStatusEvent implements GameplayEvent {
 
 	static PlayerStatusEvent lifeGained(final PlayerStatus status) {
 		return new PlayerStatusEvent(Type.LIFE_GAINED, status, 0);
+	}
+
+	static PlayerStatusEvent revived(final PlayerStatus status) {
+		return new PlayerStatusEvent(Type.REVIVED, status, 0);
 	}
 
 	static PlayerStatusEvent shieldStarted(final PlayerStatus status) {
@@ -166,8 +172,8 @@ public final class PlayerStatusEvent implements GameplayEvent {
 	}
 
 	/**
-	 * @return Whether the player still has a life after the event. False only
-	 *         on the {@link Type#DAMAGE_TAKEN} that spent the last one.
+	 * @return Whether at least one life remained when the event was created.
+	 *         A {@link Type#REVIVED} snapshot reports the restored lives.
 	 */
 	public boolean isAlive() {
 		return this.lives > 0;

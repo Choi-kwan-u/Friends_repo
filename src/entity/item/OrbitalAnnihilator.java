@@ -20,6 +20,7 @@ public class OrbitalAnnihilator {
 
     private State state;
     private long phaseStart;
+    private long pausedAt;
 
     public OrbitalAnnihilator() {
         this.state = State.LOCKED;
@@ -37,21 +38,43 @@ public class OrbitalAnnihilator {
         if (this.state != State.IDLE)
             return false;
         this.state = State.CHARGING;
-        this.phaseStart = System.currentTimeMillis();
+        this.phaseStart = currentTimeMillis();
         AudioManager.playSFX("audio/sfx/item_laser_charge.wav");
         return true;
     }
 
     /** Charging becomes firing; when the beam ends the item is consumed. */
     public final void update() {
-        long elapsed = System.currentTimeMillis() - this.phaseStart;
+        long elapsed = currentTimeMillis() - this.phaseStart;
         if (this.state == State.CHARGING && elapsed >= CHARGE_DURATION) {
             this.state = State.FIRING;
-            this.phaseStart = System.currentTimeMillis();
+            this.phaseStart = currentTimeMillis();
             AudioManager.playSFX("audio/sfx/item_laser_beam.wav");
         } else if (this.state == State.FIRING && elapsed >= BEAM_DURATION) {
             this.state = State.LOCKED;
         }
+    }
+
+    /** Freezes an active phase, including its rendered charge progress. */
+    public final void setPaused(final boolean paused) {
+        if (paused && this.pausedAt == 0) {
+            this.pausedAt = System.currentTimeMillis();
+        } else if (!paused && this.pausedAt != 0) {
+            excludePause(Math.max(0, System.currentTimeMillis() - this.pausedAt));
+            this.pausedAt = 0;
+        }
+    }
+
+    private long currentTimeMillis() {
+        return this.pausedAt == 0 ? System.currentTimeMillis() : this.pausedAt;
+    }
+
+    /** Preserves the remaining beam/charge time across a completed gameplay pause. */
+    public final void excludePause(final long pausedMillis) {
+        if (pausedMillis < 0)
+            throw new IllegalArgumentException("Pause must be non-negative.");
+        if (this.state == State.CHARGING || this.state == State.FIRING)
+            this.phaseStart += pausedMillis;
     }
 
     /** Cancels a charge in progress (ship hit), the item is not lost. */
@@ -79,7 +102,7 @@ public class OrbitalAnnihilator {
     public final float getChargeProgress() {
         if (this.state != State.CHARGING)
             return this.state == State.FIRING ? 1f : 0f;
-        float progress = (System.currentTimeMillis() - this.phaseStart)
+        float progress = (currentTimeMillis() - this.phaseStart)
                 / (float) CHARGE_DURATION;
         return Math.min(1f, progress);
     }

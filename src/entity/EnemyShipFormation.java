@@ -482,6 +482,13 @@ private int getBulletSpeed() {
 		screen = newScreen;
 	}
 
+	/** Freezes the formation's wait and every member's animation/shooting wait. */
+	public final void setPaused(final boolean paused) {
+		if (this.shootingCooldown != null) this.shootingCooldown.setPaused(paused);
+		for (List<EnemyShip> column : this.enemyShips)
+			for (EnemyShip enemy : column) enemy.setPaused(paused);
+	}
+
 	/**
 	 * Draws every individual component of the formation.
 	 */
