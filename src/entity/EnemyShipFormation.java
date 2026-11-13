@@ -126,6 +126,12 @@ public class EnemyShipFormation implements Iterable<EnemyShip> {
 	private Direction previousDirection;
 	/** Interval between movements, in frames. */
 	private int movementInterval;
+	/** Horizontal distance still to distribute across the current step. */
+	private int pendingMovementX;
+	/** Vertical distance still to distribute across the current step. */
+	private int pendingMovementY;
+	/** Whether the original initial idle frame has already elapsed. */
+	private boolean movementStarted;
 	/** Total width of the formation. */
 	private int width;
 	/** Total height of the formation. */
@@ -515,113 +521,133 @@ private int getBulletSpeed() {
 			return;
 		cleanUp();
 
-		int movementX = 0;
-		int movementY = 0;
 		double remainingProportion = (double) this.shipCount
 				/ this.initialShipCount;
 		this.movementSpeed = (int) (Math.pow(remainingProportion, 2)
 				* this.baseSpeed);
 		this.movementSpeed += MINIMUM_SPEED;
-
-        movementInterval++;
-
-        // Every pattern steps at the same short interval, which keeps the
-        // movement smooth. movementSpeed is not thrown away with the long
-        // delay it used to set: scaledStep() reads it and lengthens the
-        // step instead, so the stage setting and the speed-up as enemies
-        // are defeated reach each pattern through the distance covered per
-        // step rather than through the pause between steps.
-        final int movementDelay = STEP_INTERVAL;
-
-        if (movementInterval >= movementDelay) {
-            movementInterval = 0;
-
-            if (this.movementPattern == MovementPattern.WAVE_BOUNCE) {
-                int[] waveMovement = moveWaveBounce();
-                movementX = waveMovement[0];
-                movementY = waveMovement[1];
-            } else if (this.movementPattern == MovementPattern.DIAGONAL_BOUNCE) {
-                int[] diagonalMovement = moveDiagonalBounce();
-                movementX = diagonalMovement[0];
-                movementY = diagonalMovement[1];
-            } else {
-
-			boolean isAtBottom = positionY
-					+ this.height > screen.getHeight() - BOTTOM_MARGIN;
-			boolean isAtRightSide = positionX
-					+ this.width >= screen.getWidth() - SIDE_MARGIN;
-			boolean isAtLeftSide = positionX <= SIDE_MARGIN;
-			boolean isAtHorizontalAltitude = positionY % DESCENT_DISTANCE == 0;
-
-			if (currentDirection == Direction.DOWN) {
-				if (isAtHorizontalAltitude)
-					if (previousDirection == Direction.RIGHT) {
-						currentDirection = Direction.LEFT;
-						this.logger.info("Formation now moving left 1");
-					} else {
-						currentDirection = Direction.RIGHT;
-						this.logger.info("Formation now moving right 2");
-					}
-			} else if (currentDirection == Direction.LEFT) {
-				if (isAtLeftSide)
-					if (!isAtBottom) {
-						previousDirection = currentDirection;
-						currentDirection = Direction.DOWN;
-						this.logger.info("Formation now moving down 3");
-					} else {
-						currentDirection = Direction.RIGHT;
-						this.logger.info("Formation now moving right 4");
-					}
-			} else {
-				if (isAtRightSide)
-					if (!isAtBottom) {
-						previousDirection = currentDirection;
-						currentDirection = Direction.DOWN;
-						this.logger.info("Formation now moving down 5");
-					} else {
-						currentDirection = Direction.LEFT;
-						this.logger.info("Formation now moving left 6");
-					}
-			}
-
-			// The step is cut short rather than overshooting a side or a
-			// descent altitude, so the formation lands exactly on them.
-			if (currentDirection == Direction.RIGHT)
-				movementX = Math.min(scaledStep(X_SPEED), Math.max(1,
-						screen.getWidth() - SIDE_MARGIN
-								- (positionX + this.width)));
-			else if (currentDirection == Direction.LEFT)
-				movementX = -Math.min(scaledStep(X_SPEED),
-						Math.max(1, positionX - SIDE_MARGIN));
-			else
-				movementY = Math.min(scaledStep(Y_SPEED), DESCENT_DISTANCE
-						- floorMod(positionY, DESCENT_DISTANCE));
-			}
-
-			positionX += movementX;
-			positionY += movementY;
-
-			// Cleans explosions.
-			List<EnemyShip> destroyed;
-			for (List<EnemyShip> column : this.enemyShips) {
-				destroyed = new ArrayList<EnemyShip>();
-				for (EnemyShip ship : column) {
-					if (ship != null && ship.isDestroyed()) {
-						destroyed.add(ship);
-						this.logger.info("Removed enemy "
-								+ column.indexOf(ship) + " from column "
-								+ this.enemyShips.indexOf(column));
-					}
-				}
-				column.removeAll(destroyed);
-			}
-
-			for (List<EnemyShip> column : this.enemyShips)
-				for (EnemyShip enemyShip : column) {
-					enemyShip.move(movementX, movementY);
-					enemyShip.update();
-				}
+		// The legacy formation leaves its initial coordinates unchanged on the
+		// first update. Keep that observable contract, then run continuously.
+		if (!this.movementStarted) {
+			this.movementStarted = true;
+			return;
 		}
+
+		// Calculate the same two-frame movement as before, then retain and
+		// distribute its integer pixels over both frames. This preserves the
+		// path and average pace while halving the largest visible jump.
+		if (movementInterval == 0) {
+			int[] plannedMovement = planMovement();
+			this.pendingMovementX = plannedMovement[0];
+			this.pendingMovementY = plannedMovement[1];
+		}
+
+		int framesRemaining = STEP_INTERVAL - movementInterval;
+		int movementX = distributedMovement(this.pendingMovementX,
+				framesRemaining);
+		int movementY = distributedMovement(this.pendingMovementY,
+				framesRemaining);
+		this.pendingMovementX -= movementX;
+		this.pendingMovementY -= movementY;
+		this.movementInterval = (this.movementInterval + 1) % STEP_INTERVAL;
+
+		positionX += movementX;
+		positionY += movementY;
+		for (List<EnemyShip> column : this.enemyShips)
+			for (EnemyShip enemyShip : column)
+				enemyShip.move(movementX, movementY);
+
+		// Preserve the original two-frame cadence of non-movement updates.
+		if (this.movementInterval == 0)
+			finishMovementStep();
+	}
+
+	/** Returns one frame's fair share of the remaining integer movement. */
+	private static int distributedMovement(final int remaining,
+			final int framesRemaining) {
+		double share = (double) remaining / framesRemaining;
+		return remaining < 0 ? (int) Math.ceil(share - 0.5)
+				: (int) Math.floor(share + 0.5);
+	}
+
+	/** Calculates the next complete movement while preserving every path rule. */
+	private int[] planMovement() {
+		if (this.movementPattern == MovementPattern.WAVE_BOUNCE)
+			return moveWaveBounce();
+		if (this.movementPattern == MovementPattern.DIAGONAL_BOUNCE)
+			return moveDiagonalBounce();
+
+		int movementX = 0;
+		int movementY = 0;
+		boolean isAtBottom = positionY + this.height
+				> screen.getHeight() - BOTTOM_MARGIN;
+		boolean isAtRightSide = positionX + this.width
+				>= screen.getWidth() - SIDE_MARGIN;
+		boolean isAtLeftSide = positionX <= SIDE_MARGIN;
+		boolean isAtHorizontalAltitude = positionY % DESCENT_DISTANCE == 0;
+
+		if (currentDirection == Direction.DOWN) {
+			if (isAtHorizontalAltitude)
+				if (previousDirection == Direction.RIGHT) {
+					currentDirection = Direction.LEFT;
+					this.logger.info("Formation now moving left 1");
+				} else {
+					currentDirection = Direction.RIGHT;
+					this.logger.info("Formation now moving right 2");
+				}
+		} else if (currentDirection == Direction.LEFT) {
+			if (isAtLeftSide)
+				if (!isAtBottom) {
+					previousDirection = currentDirection;
+					currentDirection = Direction.DOWN;
+					this.logger.info("Formation now moving down 3");
+				} else {
+					currentDirection = Direction.RIGHT;
+					this.logger.info("Formation now moving right 4");
+				}
+		} else if (isAtRightSide) {
+			if (!isAtBottom) {
+				previousDirection = currentDirection;
+				currentDirection = Direction.DOWN;
+				this.logger.info("Formation now moving down 5");
+			} else {
+				currentDirection = Direction.LEFT;
+				this.logger.info("Formation now moving left 6");
+			}
+		}
+
+		// Cut the step short so the formation lands exactly on a boundary or
+		// descent altitude before the next direction is selected.
+		if (currentDirection == Direction.RIGHT)
+			movementX = Math.min(scaledStep(X_SPEED), Math.max(1,
+					screen.getWidth() - SIDE_MARGIN
+							- (positionX + this.width)));
+		else if (currentDirection == Direction.LEFT)
+			movementX = -Math.min(scaledStep(X_SPEED),
+					Math.max(1, positionX - SIDE_MARGIN));
+		else
+			movementY = Math.min(scaledStep(Y_SPEED), DESCENT_DISTANCE
+					- floorMod(positionY, DESCENT_DISTANCE));
+		return new int[] { movementX, movementY };
+	}
+
+	/** Removes defeated ships and advances ship state once per full step. */
+	private void finishMovementStep() {
+		List<EnemyShip> destroyed;
+		for (List<EnemyShip> column : this.enemyShips) {
+			destroyed = new ArrayList<EnemyShip>();
+			for (EnemyShip ship : column) {
+				if (ship != null && ship.isDestroyed()) {
+					destroyed.add(ship);
+					this.logger.info("Removed enemy " + column.indexOf(ship)
+							+ " from column " + this.enemyShips.indexOf(column));
+				}
+			}
+			column.removeAll(destroyed);
+		}
+		for (List<EnemyShip> column : this.enemyShips)
+			for (EnemyShip enemyShip : column)
+				enemyShip.update();
 	}
 
 	/**
