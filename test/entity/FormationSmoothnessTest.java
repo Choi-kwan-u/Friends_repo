@@ -10,6 +10,9 @@ import java.util.logging.LogManager;
 
 import engine.GameSettings;
 import engine.GameState;
+import level.EnemyCell;
+import level.WaveDefinition;
+import screen.Screen;
 import screen.GameScreen;
 
 /**
@@ -27,15 +30,16 @@ public final class FormationSmoothnessTest {
 	/** Frames to observe each configuration for. */
 	private static final int SAMPLE_FRAMES = 3000;
 	/**
-	 * Longest pause allowed between two steps, in frames. The diagonal
-	 * pattern, which already moves smoothly, pauses for up to three.
+	 * A one-pixel two-frame movement necessarily leaves one integer frame
+	 * idle. The diagonal path may also spend one complete interpolation
+	 * window on a vertex while advancing to its next segment.
 	 */
 	private static final int MAX_IDLE_FRAMES = 3;
 	/**
-	 * Longest distance covered in one frame, in pixels: the largest step on
-	 * each axis at once. Anything beyond it reads as a teleport.
+	 * Longest distance covered in one frame, in pixels: half of the largest
+	 * two-frame step on each axis at once.
 	 */
-	private static final double MAX_JUMP = 16.0 * Math.sqrt(2);
+	private static final double MAX_JUMP = 8.0 * Math.sqrt(2);
 	/** Width of the screen the formation is built on. */
 	private static final int SCREEN_WIDTH = 448;
 	/** Margin the formation keeps on each side. */
@@ -83,8 +87,35 @@ public final class FormationSmoothnessTest {
 				previousPace = m.pace;
 			}
 		}
+		checkCustomLevelMovement();
 		if (!report)
 			System.out.println("Formation smoothness checks passed.");
+	}
+
+	/** A sparse custom wave uses the same frame-by-frame movement pipeline. */
+	private static void checkCustomLevelMovement() throws Exception {
+		EnemyCell[][] grid = {
+				{ new EnemyCell("A", 1), null, new EnemyCell("B", 1) },
+				{ null, new EnemyCell("C", 2), null }
+		};
+		GameSettings settings = new GameSettings(3, 2, 20, 2000, 20, 100);
+		WaveDefinition wave = new WaveDefinition("smooth-custom", grid, 20,
+				100, 20, 2000);
+		EnemyShipFormation formation = new EnemyShipFormation(settings, 2, wave);
+		formation.attach(new Screen(SCREEN_WIDTH, 520, 60));
+
+		EnemyShip tracked = formation.iterator().next();
+		int lastX = tracked.getPositionX();
+		int lastY = tracked.getPositionY();
+		for (int frame = 0; frame < 120; frame++) {
+			formation.update();
+			int x = tracked.getPositionX();
+			int y = tracked.getPositionY();
+			check(Math.hypot(x - lastX, y - lastY) <= MAX_JUMP,
+					"Custom wave movement is distributed across frames");
+			lastX = x;
+			lastY = y;
+		}
 	}
 
 	private static void assertSmooth(final String pattern, final int[] setting,
