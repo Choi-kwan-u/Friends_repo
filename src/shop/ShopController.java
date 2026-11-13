@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import currency.RevivePaymentService;
 
 /** Coordinates permanent purchases and saving on the gameplay thread. */
 public final class ShopController {
@@ -28,6 +29,7 @@ public final class ShopController {
     private final AssetSaver saver;
     private final PurchaseSystem purchases;
     private final List<ShopProduct> products;
+    private final RevivePaymentService revivePaymentService;
     private SaveStatus saveStatus = SaveStatus.NOT_NEEDED;
 
     public ShopController(PlayerAssets assets, FileManager files) {
@@ -44,6 +46,8 @@ public final class ShopController {
         }
         this.assets = assets;
         this.saver = saver;
+        this.revivePaymentService =
+                new RevivePaymentService(assets, saver::save);
         ShopCatalog catalog = new ShopCatalog();
         List<ShopProduct> listed = new ArrayList<ShopProduct>();
         Set<String> ids = new HashSet<String>();
@@ -71,6 +75,19 @@ public final class ShopController {
     public synchronized int getBalance() {
         return assets.getBalance();
     }
+
+
+    public synchronized RevivePaymentService.Result payForRevive(int cost) {
+        RevivePaymentService.Result result =
+                revivePaymentService.pay(cost);
+
+        if (result == RevivePaymentService.Result.SUCCESS) {
+            saveStatus = SaveStatus.SAVED;
+        }
+
+        return result;
+    }
+
 
     /** Uses the same ship availability and saved ownership as the Shop. */
     public synchronized boolean isShipAvailable(ShipType type) {

@@ -418,10 +418,16 @@ public final class FileManager {
 				// Abort without falling back to non-atomic replacement to guarantee the destination file remains intact
 				throw new IOException("Atomic replacement is not supported on this filesystem; aborting save to preserve existing file.", e);
 			}
-			logger.info("Successfully saved player assets state to " + target);
-		} finally {
-			Files.deleteIfExists(tempFile);
+		} catch (IOException | RuntimeException failure) {
+			try {
+				Files.deleteIfExists(tempFile);
+			} catch (IOException | RuntimeException cleanupFailure) {
+				failure.addSuppressed(cleanupFailure);
+			}
+			throw failure;
 		}
+		// The atomic move is the commit point. Nothing fallible follows it:
+		// payment callers roll memory back on any reported save failure.
 	}
 
 

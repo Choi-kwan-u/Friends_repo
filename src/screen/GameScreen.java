@@ -49,6 +49,7 @@ import entity.ShipType;
 import audio.AudioManager;
 import hud.FloatingScoreHud;
 import records.RunSession;
+import revive.ReviveService;
 import records.RecordsService;
 import records.Achievement;
 import event.DefeatedEnemyType;
@@ -220,6 +221,20 @@ public class GameScreen extends Screen {
     /** Last countdown number that played a sound. */
     private int lastCountdown = -1;
 	private RunSession runSession;
+    /** One service shared by every official stage in this Campaign run. */
+    private ReviveService reviveService;
+    /** The offer keeps this screen and its current world alive until a choice. */
+    private boolean reviveOfferOpen;
+    private long reviveOfferStarted;
+    /** Retained until recovery finishes, so retry never repeats a successful payment. */
+    private boolean revivePaymentConfirmed;
+    private final Set<Integer> reviveHeldKeys = new HashSet<Integer>();
+    private boolean reviveGiveUpSelected;
+    private boolean reviveConfirmDown;
+    private boolean reviveCancelDown;
+    private boolean reviveUpDown;
+    private boolean reviveDownDown;
+    private String[] reviveFeedback = new String[0];
     private RecordsService recordsService;
     private Achievement visibleAchievement;
     private long achievementNoticeUntil;
@@ -452,6 +467,14 @@ public class GameScreen extends Screen {
         this.shipsDestroyed = gameState.getShipsDestroyed();
     }
 
+    /** Sets the revive service owned by this Campaign run. */
+    public void setReviveService(final ReviveService reviveService) {
+        if (reviveService == null) {
+            throw new IllegalArgumentException("Revive service cannot be null.");
+        }
+        this.reviveService = reviveService;
+    }
+
 /** Validates every wave before allocating a screen or changing active gameplay. */
 	public static GameScreen forCustomLevel(final GameState state,
 			final LevelDefinition definition, final double difficultyMultiplier,
@@ -594,6 +617,20 @@ public class GameScreen extends Screen {
 	 */
 	protected final void update() {
 		super.update();
+        if (this.reviveOfferOpen) {
+            updateReviveOffer();
+            draw();
+            return;
+        }
+        // A fatal state can also be supplied by a status event before this frame.
+        if (!this.playerStatus.isAlive() && !this.levelFinished) {
+            advanceStageIfReady();
+            if (this.reviveOfferOpen) {
+                draw();
+                return;
+            }
+        }
+        releaseReviveHeldKeys();
 		if (this.recordsService != null) {
 			long now = System.currentTimeMillis();
 			if (this.visibleAchievement == null || now >= this.achievementNoticeUntil) {
@@ -620,9 +657,9 @@ public class GameScreen extends Screen {
                         this.runSession.getActiveDurationMillis(System.nanoTime()));
 
             if (!this.ship.isDestroyed()) {
-                boolean moveRight = inputManager.isKeyDown(
+                boolean moveRight = isGameplayKeyDown(
                         ControlsConfig.getKey(ControlsConfig.RIGHT));
-                boolean moveLeft = inputManager.isKeyDown(
+                boolean moveLeft = isGameplayKeyDown(
                         ControlsConfig.getKey(ControlsConfig.LEFT));
 
                 boolean isRightBorder = this.ship.getPositionX()
@@ -640,7 +677,7 @@ public class GameScreen extends Screen {
                 }
 
 				// Normal shooting using configured controls.
-				if (inputManager.isKeyDown(
+				if (isGameplayKeyDown(
 						ControlsConfig.getKey(ControlsConfig.FIRE))) {
 					if (!this.annihilator.isCharging()) {
 						int fired = this.ship.shoot(this.bullets);
@@ -655,7 +692,7 @@ public class GameScreen extends Screen {
                 // debug keys enabled so normal play cannot get it for free.
                 if (DEBUG_KEYS) {
                     boolean hyperfireKeyDown =
-                            inputManager.isKeyDown(KeyEvent.VK_H);
+                            isGameplayKeyDown(KeyEvent.VK_H);
                     if (hyperfireKeyDown && !this.hyperfireKeyPressed) {
                         this.itemManager.getBuffManager().addBuff(
                                 new Hyperfire(0, 0), this.ship);
@@ -667,7 +704,7 @@ public class GameScreen extends Screen {
                 // also bound to movement or firing, so one press cannot do
                 // both and waste a grenade.
                 boolean grenadeKeyDown = !isGrenadeKeyBoundElsewhere()
-                        && inputManager.isKeyDown(KeyEvent.VK_G);
+                        && isGameplayKeyDown(KeyEvent.VK_G);
                 if (grenadeKeyDown && !this.grenadeKeyPressed) {
                     if (this.ship.launchGrenade(this.grenades, GRENADE_DETONATION_Y))
                         AudioManager.playSFX("audio/sfx/item_grenade_launch.wav");
@@ -675,7 +712,7 @@ public class GameScreen extends Screen {
                 this.grenadeKeyPressed = grenadeKeyDown;
 
                 // Orbital Annihilator charging mechanic.
-                if (inputManager.isKeyDown(KeyEvent.VK_SPACE)) {
+                if (isGameplayKeyDown(KeyEvent.VK_SPACE)) {
                     if (!this.annihilator.isReady()) {
                         this.spaceHeldSince = 0;
                     } else if (this.spaceHeldSince == 0) {
@@ -699,8 +736,7 @@ public class GameScreen extends Screen {
 				// the buff item, so it cannot be verified by playing without
 				// this key. Removed in that PR.
 				if (DEBUG_KEYS) {
-					boolean shieldKeyDown = inputManager
-							.isKeyDown(KeyEvent.VK_F2);
+					boolean shieldKeyDown = isGameplayKeyDown(KeyEvent.VK_F2);
 					// Fires on the press, not every frame the key is held,
 					// so holding F2 cannot chain shields over the expiry and
 					// hide the very timing this key exists to show.
@@ -760,6 +796,12 @@ public class GameScreen extends Screen {
 		if (!updateFallingObstacles())
 			manageFallingObstacleCollisions();
         manageCollisions();
+        // The fatal collision opens the modal immediately. Do not award more
+        // kills, move projectiles or advance a wave behind it in this frame.
+        if (this.reviveOfferOpen) {
+            draw();
+            return;
+        }
         manageGrenades();
         manageBallContact();
 
@@ -778,13 +820,11 @@ public class GameScreen extends Screen {
 
     /** Progression shared by official and custom stages. */
     void advanceStageIfReady() {
+        if (this.reviveOfferOpen) return;
         if (!this.levelFinished) {
             if (!this.playerStatus.isAlive()) {
-                this.levelFinished = true;
-                this.stageCleared = false;
-                AudioManager.playSFX("audio/sfx/game_over.wav");
-                this.screenFinishedCooldown.reset();
-                this.logger.info("Stage " + this.level + " failed.");
+                if (openReviveOffer()) return;
+                finishCampaignGameOver();
             } else if (this.enemyShipFormation.isEmpty() && isBossCleared()) {
                 if (this.currentWave < this.waves.size() - 1) {
                     startNextWave();
@@ -804,6 +844,213 @@ public class GameScreen extends Screen {
 
         if (this.levelFinished && this.runSession != null)
             this.runSession.stopActiveSegment(System.nanoTime());
+    }
+
+    /** Opens only for the official Campaign; legacy/custom screens retain their flow. */
+    private boolean openReviveOffer() {
+        if (this.reviveOfferOpen) return true;
+        if (this.customWaves != null || this.reviveService == null
+                || !this.reviveService.openOffer()) return false;
+        this.reviveOfferOpen = true;
+        this.reviveOfferStarted = System.currentTimeMillis();
+        this.revivePaymentConfirmed = false;
+        this.reviveGiveUpSelected = false;
+        this.reviveConfirmDown = reviveConfirmKeyDown();
+        this.reviveCancelDown = inputManager.isKeyDown(KeyEvent.VK_ESCAPE);
+        this.reviveUpDown = inputManager.isKeyDown(KeyEvent.VK_UP);
+        this.reviveDownDown = inputManager.isKeyDown(KeyEvent.VK_DOWN);
+        this.reviveFeedback = new String[0];
+        // Apply the same death cleanup if zero lives came from a status event.
+        this.itemManager.getBuffManager().resetAllBuffs(this.ship);
+        this.playerStatus.clearSlowDebuff();
+        this.playerStatus.clearShield();
+        this.ship.cancelBurst();
+        this.annihilator.cancelCharge();
+        this.spaceHeldSince = 0;
+        setGameplayPaused(true);
+        if (this.runSession != null) this.runSession.stopActiveSegment(System.nanoTime());
+        return true;
+    }
+
+    private boolean reviveConfirmKeyDown() {
+        return inputManager.isKeyDown(KeyEvent.VK_ENTER)
+                || inputManager.isKeyDown(KeyEvent.VK_SPACE);
+    }
+
+    /** Every action needs a fresh key edge; Escape takes priority over payment. */
+    private void updateReviveOffer() {
+        boolean confirm = reviveConfirmKeyDown();
+        boolean cancel = inputManager.isKeyDown(KeyEvent.VK_ESCAPE);
+        boolean up = inputManager.isKeyDown(KeyEvent.VK_UP);
+        boolean down = inputManager.isKeyDown(KeyEvent.VK_DOWN);
+        boolean confirmEdge = confirm && !this.reviveConfirmDown;
+        boolean cancelEdge = cancel && !this.reviveCancelDown;
+        if (up && !this.reviveUpDown) this.reviveGiveUpSelected = false;
+        if (down && !this.reviveDownDown) this.reviveGiveUpSelected = true;
+        this.reviveConfirmDown = confirm;
+        this.reviveCancelDown = cancel;
+        this.reviveUpDown = up;
+        this.reviveDownDown = down;
+        if (cancelEdge || (confirmEdge && this.reviveGiveUpSelected)) {
+            this.reviveService.decline();
+            if (this.revivePaymentConfirmed && this.playerStatus.isAlive())
+                this.playerStatus.takeDamage(this.playerStatus.getLives());
+            this.reviveOfferOpen = false;
+            finishCampaignGameOver();
+        } else if (confirmEdge) {
+            confirmCampaignRevive();
+        }
+    }
+
+    private void confirmCampaignRevive() {
+        if (this.revivePaymentConfirmed) {
+            resumeAfterRevive();
+            return;
+        }
+        // Recovery must still be needed before settlement or payment can run.
+        if (this.playerStatus.isAlive()) {
+            this.reviveFeedback = new String[] { "Player state changed.", "No payment made. Choose GIVE UP." };
+            return;
+        }
+        ReviveService.Result result = this.reviveService.confirmRevive();
+        switch (result) {
+            case SUCCESS:
+                this.revivePaymentConfirmed = true;
+                resumeAfterRevive();
+                break;
+            case INSUFFICIENT_FUNDS:
+                this.reviveFeedback = new String[] { "Not enough Credits.", "No payment made. Retry or give up." };
+                break;
+            case SETTLEMENT_FAILED:
+                this.reviveFeedback = new String[] { "Credit settlement failed.", "Rewards kept pending. No payment made." };
+                break;
+            case SAVE_FAILED:
+                this.reviveFeedback = new String[] { "Credits could not be saved.", "No payment made. Retry or give up." };
+                break;
+            case NO_ACTIVE_OFFER:
+            case NO_REVIVES_LEFT:
+                this.reviveService.decline();
+                this.reviveOfferOpen = false;
+                finishCampaignGameOver();
+                break;
+            default:
+                throw new IllegalStateException("Unexpected revive result: " + result);
+        }
+    }
+
+    private void resumeAfterRevive() {
+        try {
+            // A listener may have failed after the life change. Keep the paid
+            // receipt and skip a second life event when the user retries.
+            if (!this.playerStatus.isAlive()) this.playerStatus.reviveAtHalfLives();
+        } catch (RuntimeException failure) {
+            this.logger.warning("Paid revive recovery needs retry: " + failure);
+            this.reviveFeedback = new String[] { "Revive paid. Recovery needs retry.",
+                    "Retry to resume. No extra payment." };
+            return;
+        }
+        int x = findRevivePositionX();
+        long pausedMillis = resumeGameplayTimers();
+        this.ship.reviveAt(x, Math.max(SEPARATION_LINE_HEIGHT + 1, this.height - 30), pausedMillis);
+        this.spaceHeldSince = 0;
+        this.grenadeKeyPressed = inputManager.isKeyDown(KeyEvent.VK_G);
+        rememberReviveHeldKeys();
+        this.reviveOfferOpen = false;
+        this.revivePaymentConfirmed = false;
+        this.reviveFeedback = new String[0];
+        this.isLowHealthBGM = this.playerStatus.getLives() == 1;
+        AudioManager.playBGM(this.isLowHealthBGM ? "audio/bgm/music_game_urgent.wav"
+                : isBossLevel(this.level) ? "audio/bgm/music_boss.wav" : "audio/bgm/music_game.wav");
+        // The next active segment starts on the next gameplay frame, after IO.
+    }
+
+    private void setGameplayPaused(final boolean paused) {
+        this.inputDelay.setPaused(paused);
+        this.fallingObstacleCooldown.setPaused(paused);
+        this.bossExplosionCooldown.setPaused(paused);
+        this.enemyShipFormation.setPaused(paused);
+        this.bonusEnemyManager.setPaused(paused);
+        if (this.bossManager.getAttackSystem() != null)
+            this.bossManager.getAttackSystem().setPaused(paused);
+        this.annihilator.setPaused(paused);
+    }
+
+    private long resumeGameplayTimers() {
+        if (this.reviveOfferStarted == 0) return 0;
+        long pausedMillis = Math.max(0, System.currentTimeMillis() - this.reviveOfferStarted);
+        setGameplayPaused(false);
+        this.gameStartTime += pausedMillis;
+        if (this.achievementNoticeUntil != 0) this.achievementNoticeUntil += pausedMillis;
+        this.reviveOfferStarted = 0;
+        return pausedMillis;
+    }
+
+    private int findRevivePositionX() {
+        int right = Math.max(1, this.width - this.ship.getWidth() - 1);
+        int best = clampShipPositionX((this.width - this.ship.getWidth()) / 2,
+                this.ship.getWidth(), this.width);
+        double clearance = reviveClearance(best);
+        for (int x = 1; x <= right; x++) {
+            double candidate = reviveClearance(x);
+            if (candidate > clearance) {
+                best = x;
+                clearance = candidate;
+            }
+        }
+        return best;
+    }
+
+    private double reviveClearance(final int x) {
+        double clearance = Double.POSITIVE_INFINITY;
+        for (EnemyShip enemy : this.enemyShipFormation)
+            if (!enemy.isDestroyed()) clearance = Math.min(clearance, reviveDistance(x, enemy));
+        if (this.bonusEnemyManager.isActive())
+            clearance = Math.min(clearance, reviveDistance(x, this.bonusEnemyManager.getShip()));
+        Boss boss = this.bossManager.getBoss();
+        if (boss != null && !boss.isDefeated()) clearance = Math.min(clearance, reviveDistance(x, boss));
+        for (Bullet bullet : this.bullets)
+            if (bullet.isEnemyBullet()) clearance = Math.min(clearance, reviveDistance(x, bullet));
+        for (BossBullet bullet : this.bossBullets) clearance = Math.min(clearance, reviveDistance(x, bullet));
+        for (FallingObstacle obstacle : this.fallingObstacles)
+            clearance = Math.min(clearance, reviveDistance(x, obstacle));
+        return clearance;
+    }
+
+    private double reviveDistance(final int x, final Entity hazard) {
+        double dx = Math.max(0, Math.abs(x + this.ship.getWidth() / 2.0
+                - hazard.getPositionX() - hazard.getWidth() / 2.0)
+                - (this.ship.getWidth() + hazard.getWidth()) / 2.0);
+        double dy = Math.max(0, Math.abs(Math.max(SEPARATION_LINE_HEIGHT + 1, this.height - 30)
+                + this.ship.getHeight() / 2.0 - hazard.getPositionY() - hazard.getHeight() / 2.0)
+                - (this.ship.getHeight() + hazard.getHeight()) / 2.0);
+        return dx * dx + dy * dy;
+    }
+
+    private void rememberReviveHeldKeys() {
+        int[] keys = { KeyEvent.VK_ENTER, KeyEvent.VK_SPACE, KeyEvent.VK_UP, KeyEvent.VK_DOWN,
+            KeyEvent.VK_W, KeyEvent.VK_S, KeyEvent.VK_G, KeyEvent.VK_H, KeyEvent.VK_F2,
+            ControlsConfig.getKey(ControlsConfig.LEFT), ControlsConfig.getKey(ControlsConfig.RIGHT),
+            ControlsConfig.getKey(ControlsConfig.FIRE) };
+        for (int key : keys)
+            if (inputManager.isKeyDown(key)) this.reviveHeldKeys.add(key);
+    }
+
+    private void releaseReviveHeldKeys() {
+        this.reviveHeldKeys.removeIf(key -> !inputManager.isKeyDown(key));
+    }
+
+    private boolean isGameplayKeyDown(final int key) {
+        return !this.reviveHeldKeys.contains(key) && inputManager.isKeyDown(key);
+    }
+
+    private void finishCampaignGameOver() {
+        resumeGameplayTimers();
+        this.levelFinished = true;
+        this.stageCleared = false;
+        AudioManager.playSFX("audio/sfx/game_over.wav");
+        this.screenFinishedCooldown.reset();
+        if (this.runSession != null) this.runSession.stopActiveSegment(System.nanoTime());
+        this.logger.info("Stage " + this.level + " failed.");
     }
 
 	/**
@@ -873,8 +1120,9 @@ public class GameScreen extends Screen {
 			drawManager.drawEntity(obstacle, obstacle.getPositionX(),
 					obstacle.getPositionY());
 
-		drawManager.drawEntity(this.ship, this.ship.getPositionX(),
-				this.ship.getPositionY());
+        if (this.ship.isDestroyed() || !this.ship.isInvulnerable()
+                || (System.currentTimeMillis() / 100) % 2 == 0)
+            drawManager.drawEntity(this.ship, this.ship.getPositionX(), this.ship.getPositionY());
 
         if (this.ship.isShieldActive() && !this.ship.isDestroyed()) {
             drawManager.drawShield(this, this.ship);
@@ -912,7 +1160,7 @@ public class GameScreen extends Screen {
                     this.twinCanonItem.getPositionX(),
                     this.twinCanonItem.getPositionY());
 
-        drawManager.drawFloatingScores(floatingScoreHud, this);
+        if (!this.reviveOfferOpen) drawManager.drawFloatingScores(floatingScoreHud, this);
 
 		// Interface.
 		drawManager.drawScore(this, this.score);
@@ -961,6 +1209,11 @@ public class GameScreen extends Screen {
 
         if (this.visibleAchievement != null)
             drawManager.drawAchievementNotice(this, this.visibleAchievement);
+        if (this.reviveOfferOpen)
+            drawManager.drawReviveOffer(this, "Campaign paused",
+                    this.revivePaymentConfirmed ? 0 : this.reviveService.getNextReviveCost(),
+                    this.reviveService.getRemainingRevives(),
+                    this.reviveService.getBalance(), this.reviveGiveUpSelected, true, this.reviveFeedback);
         drawManager.completeDrawing(this);
     }
 
@@ -1059,7 +1312,7 @@ public class GameScreen extends Screen {
      * Manages collisions between bullets and ships.
      */
     private void manageCollisions() {
-        if (this.levelFinished)
+        if (this.levelFinished || this.reviveOfferOpen)
             return;
         Set<Bullet> recyclable = new HashSet<Bullet>();
         for (Bullet bullet : this.bullets) {
@@ -1067,6 +1320,7 @@ public class GameScreen extends Screen {
                 if (checkCollision(bullet, this.ship) && !this.levelFinished) {
                     recyclable.add(bullet);
                     damagePlayer(1, "Hit on player ship");
+                    if (this.reviveOfferOpen) break;
                 }
             } else {
                 for (EnemyShip enemyShip : this.enemyShipFormation) {
@@ -1150,6 +1404,7 @@ public class GameScreen extends Screen {
         }
         this.bullets.removeAll(recyclable);
         BulletPool.recycle(recyclable);
+        if (this.reviveOfferOpen) return;
 
         Set<BossBullet> hitBossBullets = new HashSet<BossBullet>();
         for (BossBullet bossBullet : this.bossBullets) {
@@ -1157,6 +1412,7 @@ public class GameScreen extends Screen {
                 hitBossBullets.add(bossBullet);
                 damagePlayer(bossBullet.getDamage(),
                         "Hit on player ship by the boss");
+                if (this.reviveOfferOpen) break;
             }
         }
         this.bossBullets.removeAll(hitBossBullets);
@@ -1230,6 +1486,7 @@ public class GameScreen extends Screen {
 	 */
 	// The damage path is accessible to tests in the screen package.
 	boolean damagePlayer(final int damage, final String logMessage) {
+        if (this.levelFinished || this.reviveOfferOpen) return false;
 		// The Chameleon Hull makes the ship immune while it is active.
 		if (this.ship.isChameleonHullActive())
 			return false;
@@ -1269,6 +1526,7 @@ public class GameScreen extends Screen {
 		}
 		this.logger.info(logMessage + ", " + this.playerStatus.getLives()
 				+ " lives remaining.");
+        if (!this.playerStatus.isAlive()) openReviveOffer();
 		return true;
 	}
 
@@ -1641,10 +1899,10 @@ public class GameScreen extends Screen {
             return;
         }
 
-        boolean up = inputManager.isKeyDown(KeyEvent.VK_UP)
-                || inputManager.isKeyDown(KeyEvent.VK_W);
-        boolean down = inputManager.isKeyDown(KeyEvent.VK_DOWN)
-                || inputManager.isKeyDown(KeyEvent.VK_S);
+        boolean up = isGameplayKeyDown(KeyEvent.VK_UP)
+                || isGameplayKeyDown(KeyEvent.VK_W);
+        boolean down = isGameplayKeyDown(KeyEvent.VK_DOWN)
+                || isGameplayKeyDown(KeyEvent.VK_S);
 
         if (up && !down) {
             this.ship.moveUp();
