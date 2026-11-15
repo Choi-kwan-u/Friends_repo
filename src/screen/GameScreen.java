@@ -562,11 +562,13 @@ public class GameScreen extends Screen {
 			}
 		});
 		// The boss appears only on boss stages.
-		if (isBossLevel(this.level))
+		if (isBossLevel(this.level)) {
+			Boss.BossType bossType = bossTypeForLevel(this.level);
 			this.bossManager.spawn(new BossSpawnRequest(
-					bossTypeForLevel(this.level),
-					this.width / 2 - Boss.WIDTH / 2, 78,
+					bossType,
+					this.width / 2 - bossType.getWidth() / 2, 78,
 					this.level, 0));
+		}
 		this.bossExplosionCooldown = Core.getCooldown(BOSS_EXPLOSION_TIME);
 
         // Special input delay / countdown.
@@ -1191,6 +1193,8 @@ public class GameScreen extends Screen {
 					this.annihilator.getChargeProgress());
 
         drawManager.drawHorizontalLine(this, SEPARATION_LINE_HEIGHT - 1);
+        drawManager.drawBossHealthBar(this, this.bossManager.getHudInfo(),
+                SEPARATION_LINE_HEIGHT + 8);
 
         // Countdown to game start.
         if (!this.inputDelay.checkFinished()) {
@@ -1738,7 +1742,7 @@ public class GameScreen extends Screen {
 			// Three explosions across the boss, as it is bigger than an enemy.
 			for (int i = -1; i <= 1; i++)
 				this.particleSystem.spawnEnemyExplosion(
-						event.getPositionX() + i * Boss.WIDTH / 3,
+						event.getPositionX() + i * event.getBossType().getWidth() / 3,
 						event.getPositionY());
 			// The boss manager sends this once per boss, so the count and
 			// the record are both taken from here. The score screen and the

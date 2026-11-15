@@ -1,5 +1,7 @@
 package engine;
 
+import boss.BossHudInfo;
+import entity.Boss;
 import entity.ShipType;
 import entity.item.ChameleonHull;
 
@@ -10,10 +12,12 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import javax.imageio.ImageIO;
 
 import screen.Screen;
 import hud.FloatingScoreHud;
@@ -47,6 +51,9 @@ import screen.GameModeScreen;
  *
  */
 public final class DrawManager {
+    private final BufferedImage bossASprite;
+    private final BufferedImage bossBSprite;
+
     private int getNormalGameOverTitleY(final Screen screen) {
         int regularHeight = fontRegularMetrics.getHeight();
         int bigHeight = fontBigMetrics.getHeight();
@@ -187,6 +194,8 @@ public final class DrawManager {
         fileManager = Core.getFileManager();
         logger = Core.getLogger();
         logger.info("Started loading resources.");
+        bossASprite = loadBossSprite("/boss.png");
+        bossBSprite = loadBossSprite("/boss-b.png");
 
         try {
             spriteMap = new LinkedHashMap<SpriteType, boolean[][]>();
@@ -242,6 +251,21 @@ public final class DrawManager {
         }
     }
 
+    private BufferedImage loadBossSprite(final String resource) {
+        try (InputStream input = DrawManager.class.getResourceAsStream(resource)) {
+            if (input != null) {
+                BufferedImage image = ImageIO.read(input);
+                if (image != null)
+                    return image;
+            }
+        } catch (IOException e) {
+            logger.warning("Could not read " + resource + ": " + e.getMessage());
+            return null;
+        }
+        logger.warning("Boss sprite is missing or invalid: " + resource);
+        return null;
+    }
+
     /**
      * Returns shared instance of DrawManager.
      *
@@ -275,6 +299,17 @@ public final class DrawManager {
      */
     public void drawEntity(final Entity entity, final int positionX,
             final int positionY) {
+        if (entity instanceof Boss boss
+                && entity.getSpriteType() == SpriteType.EnemyShipSpecial) {
+            BufferedImage bossSprite = boss.getType() == Boss.BossType.BOSS_B
+                    ? bossBSprite : bossASprite;
+            if (bossSprite != null) {
+                backBufferGraphics.drawImage(bossSprite, positionX, positionY,
+                        entity.getWidth(), entity.getHeight(), null);
+                return;
+            }
+        }
+
         if (entity instanceof AnnihilatorItem) {
             drawFallingLaser(entity, positionX, positionY);
             return;
@@ -1467,6 +1502,27 @@ public final class DrawManager {
         backBufferGraphics.setColor(color);
         backBufferGraphics.fillRect(positionX, positionY,
                 width * volume / 100, height);
+    }
+
+    public void drawBossHealthBar(final Screen screen, final BossHudInfo boss,
+            final int y) {
+        if (boss == null || !boss.isVisible())
+            return;
+
+        int width = screen.getWidth() / 2;
+        int x = (screen.getWidth() - width) / 2;
+        int height = 8;
+        int filledWidth = (width - 2) * boss.getCurrentHealth()
+                / boss.getMaxHealth();
+        Color previous = backBufferGraphics.getColor();
+        backBufferGraphics.setColor(Color.LIGHT_GRAY);
+        backBufferGraphics.drawRect(x, y, width - 1, height - 1);
+        backBufferGraphics.setColor(Color.DARK_GRAY);
+        backBufferGraphics.fillRect(x + 1, y + 1, width - 2, height - 2);
+        backBufferGraphics.setColor(boss.getBossType() == Boss.BossType.BOSS_B
+                ? Color.RED : new Color(180, 150, 255));
+        backBufferGraphics.fillRect(x + 1, y + 1, filledWidth, height - 2);
+        backBufferGraphics.setColor(previous);
     }
 
     /**
