@@ -140,6 +140,15 @@ public final class BossAttackSystem {
             markSpecialDueIfEnabled();
     }
 
+    /** Freezes normal attacks, special windup/reuse and rapid-fire duration. */
+    public void setPaused(final boolean paused) {
+        if (this.attackCooldown != null) this.attackCooldown.setPaused(paused);
+        if (this.windupCooldown != null) this.windupCooldown.setPaused(paused);
+        if (this.buffCooldown != null) this.buffCooldown.setPaused(paused);
+        SpecialAttack special = this.config.getSpecialAttack();
+        if (special != null) special.setPaused(paused);
+    }
+
     /** Stops all attacks, used when the boss is defeated. */
     public void stop() {
         this.active = false;

@@ -216,6 +216,20 @@ public class EnemyShip extends Entity {
 		}
 	}
 
+	/** Freezes animation and shooting; shared shooter timers are paused once. */
+	public final void setPaused(final boolean paused) {
+		if (this.animationCooldown != null) this.animationCooldown.setPaused(paused);
+		if (this.shootingCooldown != null) this.shootingCooldown.setPaused(paused);
+	}
+
+	/** Preserves animation and shooting progress across an Endless revive offer. */
+	public final void excludePause(final long pausedMillis) {
+		if (this.animationCooldown != null)
+			this.animationCooldown.excludePause(pausedMillis);
+		if (this.shootingCooldown != null)
+			this.shootingCooldown.excludePause(pausedMillis);
+	}
+
 	/**
 	 * Destroys the ship, causing an explosion.
 	 */

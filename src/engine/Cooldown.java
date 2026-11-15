@@ -16,6 +16,8 @@ public class Cooldown {
 	private int duration;
 	/** Beginning time. */
 	private long time;
+	/** Frozen clock instant, or zero while running. */
+	private long pausedAt;
 
 	/**
 	 * Constructor, established the time until the action can be performed
@@ -70,7 +72,7 @@ public class Cooldown {
 	 */
 	public final boolean checkFinished() {
 		if ((this.time == 0)
-				|| this.time + this.duration < System.currentTimeMillis())
+				|| this.time + this.duration < currentTimeMillis())
 			return true;
 		return false;
 	}
@@ -101,10 +103,35 @@ public class Cooldown {
 	}
 
 	/**
+	 * Freezes or resumes this timer without resetting its remaining wait or
+	 * rerolling variance. Repeated calls are harmless for shared timers.
+	 */
+	public final void setPaused(final boolean paused) {
+		if (paused && this.pausedAt == 0) {
+			this.pausedAt = System.currentTimeMillis();
+		} else if (!paused && this.pausedAt != 0) {
+			excludePause(Math.max(0, System.currentTimeMillis() - this.pausedAt));
+			this.pausedAt = 0;
+		}
+	}
+
+	private long currentTimeMillis() {
+		return this.pausedAt == 0 ? System.currentTimeMillis() : this.pausedAt;
+	}
+
+	/** Excludes a completed gameplay pause without rerolling a variable duration. */
+	public final void excludePause(final long pausedMillis) {
+		if (pausedMillis < 0)
+			throw new IllegalArgumentException("Pause must be non-negative.");
+		if (this.time != 0)
+			this.time += pausedMillis;
+	}
+
+	/**
 	 * Restarts the cooldown.
 	 */
 	public final void reset() {
-		this.time = System.currentTimeMillis();
+		this.time = currentTimeMillis();
 		if (this.variance != 0)
 			this.duration = calculateDuration(this.milliseconds, this.variance,
 					Math.random());

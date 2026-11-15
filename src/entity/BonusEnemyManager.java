@@ -67,6 +67,13 @@ public class BonusEnemyManager {
 		}
 	}
 
+	/** Freezes the next appearance and the current explosion without respawning. */
+	public final void setPaused(final boolean paused) {
+		this.spawnCooldown.setPaused(paused);
+		this.explosionCooldown.setPaused(paused);
+		if (this.bonusShip != null) this.bonusShip.setPaused(paused);
+	}
+
 	/**
 	 * Destroys the bonus ship after it was hit by a bullet.
 	 *

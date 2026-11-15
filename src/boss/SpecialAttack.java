@@ -58,6 +58,11 @@ public abstract class SpecialAttack {
         return this.windupMilliseconds;
     }
 
+    /** Freezes the reuse wait without changing the special attack's state. */
+    public final void setPaused(final boolean paused) {
+        this.cooldown.setPaused(paused);
+    }
+
     /**
      * Checks the cooldown between two uses. The first use in a phase does
      * not wait for it (see BossAttackSystem).

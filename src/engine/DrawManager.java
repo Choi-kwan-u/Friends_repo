@@ -523,12 +523,53 @@ public final class DrawManager {
         backBufferGraphics.setColor(previous);
     }
 
-    /**
-     * Draws the pause overlay: a pause icon with a "Paused" label.
-     *
-     * @param screen
-     *               Screen to draw on.
-     */
+    /** Opaque pixel-style modal with fixed, readable rows at the game's 448x520 size. */
+    public void drawReviveOffer(final Screen screen, final int cost,
+            final int remaining, final int balance, final boolean giveUpSelected,
+            final String[] feedback) {
+        drawReviveOffer(screen, "Endless paused", cost, remaining, balance,
+                giveUpSelected, true, feedback);
+    }
+
+    /** Shared modal renderer; the existing Endless entry point keeps its label. */
+    public void drawReviveOffer(final Screen screen, final String modeLabel, final int cost,
+            final int remaining, final int balance, final boolean giveUpSelected,
+            final boolean reviveAvailable, final String[] feedback) {
+        Color previousColor = backBufferGraphics.getColor();
+        Font previousFont = backBufferGraphics.getFont();
+        int panelX = 16;
+        int panelWidth = screen.getWidth() - panelX * 2;
+        int top = Math.max(48, (screen.getHeight() - 340) / 2);
+        backBufferGraphics.setColor(GameColors.BACKGROUND);
+        backBufferGraphics.fillRect(panelX, top, panelWidth, 340);
+        backBufferGraphics.setColor(GameColors.HIGHLIGHT);
+        backBufferGraphics.drawRect(panelX, top, panelWidth - 1, 339);
+        drawCenteredBigString(screen, "REVIVE?", top + 38);
+        backBufferGraphics.setColor(GameColors.TEXT);
+        drawCenteredRegularString(screen, modeLabel, top + 65);
+        drawCenteredRegularString(screen, "Revives left: " + remaining, top + 90);
+        drawCenteredRegularString(screen, "Balance: " + balance + " Credits", top + 114);
+        backBufferGraphics.setColor(GameColors.TEXT_DIM);
+        drawCenteredRegularString(screen, reviveAvailable ? "Earned Credits settle on confirm."
+                : "Revive unavailable. You can give up.", top + 138);
+
+        backBufferGraphics.setColor(!reviveAvailable ? GameColors.TEXT_DIM
+                : giveUpSelected ? GameColors.TEXT : GameColors.HIGHLIGHT);
+        drawCenteredRegularString(screen, (giveUpSelected ? "  " : "> ")
+                + "REVIVE - " + cost + " Credits", top + 178);
+        backBufferGraphics.setColor(giveUpSelected ? GameColors.HIGHLIGHT : GameColors.TEXT);
+        drawCenteredRegularString(screen, (giveUpSelected ? "> " : "  ") + "GIVE UP", top + 208);
+        backBufferGraphics.setColor(GameColors.EXPLOSION_YELLOW);
+        for (int i = 0; i < feedback.length; i++)
+            drawCenteredRegularString(screen, feedback[i], top + 241 + i * 20);
+        backBufferGraphics.setColor(GameColors.TEXT_DIM);
+        drawCenteredRegularString(screen, "Up/Down: choose  Enter/Space: confirm", top + 301);
+        drawCenteredRegularString(screen, "Esc: give up  |  Release to retry", top + 323);
+        backBufferGraphics.setColor(previousColor);
+        backBufferGraphics.setFont(previousFont);
+    }
+
+    /** Draws the pause icon and label. */
     public void drawPaused(final Screen screen) {
         int scale = 4;
         drawIcon(Icon.PAUSE, screen.getWidth() / 2 - Icon.PAUSE.getWidth()

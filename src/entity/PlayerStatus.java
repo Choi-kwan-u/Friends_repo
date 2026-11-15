@@ -359,8 +359,8 @@ public class PlayerStatus {
 
 	/**
 	 * Grants one life when the player is alive and below the configured maximum.
-	 * A player with no lives cannot be revived; the game-over flow has already
-	 * ended level progression at that point.
+	 * This ordinary extra-life path cannot revive a player with no lives.
+	 * Paid revives use {@link #reviveAtHalfLives()} instead.
 	 *
 	 * @return Whether a life was added.
 	 */
@@ -370,6 +370,28 @@ public class PlayerStatus {
 
 		this.lives++;
 		publish(PlayerStatusEvent.lifeGained(this));
+		return true;
+	}
+
+	/**
+	 * Restores a dead player to half the configured maximum, rounded up.
+	 * The maximum already includes the selected ship and this run's Hull
+	 * upgrade snapshot. The caller must confirm payment before invoking this
+	 * method; revive prices, limits and ship recovery belong to that caller.
+	 *
+	 * <p>The existing status and listeners are retained. A living player is
+	 * left unchanged, so a repeated recovery cannot heal or publish twice.
+	 * This method grants neither a shield nor ship invulnerability.</p>
+	 *
+	 * @return Whether a dead player was revived.
+	 */
+	public final boolean reviveAtHalfLives() {
+		if (isAlive())
+			return false;
+
+		// Equivalent to (maxLives + 1) / 2, without integer overflow.
+		this.lives = this.maxLives / 2 + this.maxLives % 2;
+		publish(PlayerStatusEvent.revived(this));
 		return true;
 	}
 

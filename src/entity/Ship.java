@@ -456,6 +456,33 @@ public class Ship extends Entity {
     }
 
     /**
+     * Recovers the existing ship after a paid Endless revive. Life-loss buffs
+     * have already been removed by the screen. There is no hit stun or owed
+     * burst; protection starts fresh when the offer closes, even after a long
+     * wait. Grenade stock and its remaining cooldown are retained.
+     */
+    public final void reviveAt(final int x, final int y, final long pausedMillis) {
+        if (pausedMillis < 0)
+            throw new IllegalArgumentException("Pause must be non-negative.");
+        deactivateChameleonHull();
+        restoreBaseStats();
+        setSlowDebuffActive(false);
+        this.hyperfireEnabled = false;
+        this.twinCannonActive = false;
+        this.isShieldActive = false;
+        cancelBurst();
+        this.lastShotTime = 0;
+        this.grenadeCooldown.excludePause(pausedMillis);
+        this.destructionCooldown = Core.getCooldown(STUN_DURATION);
+        this.damageFeedbackCooldown = Core.getCooldown(DAMAGE_FEEDBACK_DURATION);
+        this.invulnerabilityCooldown.reset();
+        this.spriteType = SpriteType.Ship;
+        setColor(this.baseColor);
+        this.positionX = x;
+        this.positionY = y;
+    }
+
+    /**
      * Checks if the ship is destroyed.
      *
      * @return True if the ship is currently destroyed.

@@ -110,6 +110,8 @@ tasks.named('test', Test) {
 def smokeTestClasses = [
     'PlayerStatSourceTest',
     'PlayerStatusExtraLifeTest',
+    'currency.RevivePaymentServiceTest',
+    'revive.ReviveManagerTest',
     'engine.CooldownVarianceTest',
     'engine.CoreDifficultySettingsTest',
     'entity.BossDefeatTest',
