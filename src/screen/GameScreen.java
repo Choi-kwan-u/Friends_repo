@@ -629,15 +629,17 @@ public class GameScreen extends Screen {
 	 * enemy appearance sound.
 	 */
 	protected final void update() {
-        // While paused or counting down after a pause, only draw the frame.
-        if (handlePause()) {
+		super.update();
+        // The revive modal owns Esc while it is open. Handle it before the
+        // campaign pause shortcut so declining a revive cannot pause instead.
+        if (this.reviveOfferOpen) {
+            updateReviveOffer();
             draw();
             return;
         }
 
-		super.update();
-        if (this.reviveOfferOpen) {
-            updateReviveOffer();
+        // While paused or counting down after a pause, only draw the frame.
+        if (handlePause()) {
             draw();
             return;
         }
