@@ -256,8 +256,7 @@ public class GameScreen extends Screen {
     static final String DEFEAT_ID_SEPARATOR = ":";
     /** Prevents repeated activation while holding H. */
     private boolean hyperfireKeyPressed = false;
-    /** Flag to track if the urgent low-health BGM is currently playing. */
-    private boolean isLowHealthBGM = false;
+
 
     /**
      * Constructor, establishes the properties of the screen.
@@ -591,20 +590,14 @@ public class GameScreen extends Screen {
 			AudioManager.playSFX("audio/sfx/bonus_life.wav");
 		}
 
-		// The last life is checked first, so the urgent track also plays on
-		// boss stages.
-		if (this.playerStatus.getLives() == 1) {
-			AudioManager.playBGM("audio/bgm/music_game_urgent.wav");
-			this.isLowHealthBGM = true;
-		} else if (isBossLevel(this.level)) {
-			// Boss stages start the boss music right away, so it already plays
-			// during the countdown instead of switching when the boss appears.
-			AudioManager.playBGM("audio/bgm/music_boss.wav");
-			this.isLowHealthBGM = false;
-		} else {
-			AudioManager.playBGM("audio/bgm/music_game.wav");
-			this.isLowHealthBGM = false;
-		}
+
+        if (isBossLevel(this.level)) {
+            // Boss stages start the boss music right away, so it already plays
+            // during the countdown instead of switching when the boss appears.
+            AudioManager.playBGM("audio/bgm/music_boss.wav");
+        } else {
+            AudioManager.playBGM("audio/bgm/music_game.wav");
+        }
 	}
 
     /**
@@ -1021,9 +1014,11 @@ public class GameScreen extends Screen {
         this.reviveOfferOpen = false;
         this.revivePaymentConfirmed = false;
         this.reviveFeedback = new String[0];
-        this.isLowHealthBGM = this.playerStatus.getLives() == 1;
-        AudioManager.playBGM(this.isLowHealthBGM ? "audio/bgm/music_game_urgent.wav"
-                : isBossLevel(this.level) ? "audio/bgm/music_boss.wav" : "audio/bgm/music_game.wav");
+
+        AudioManager.playBGM(isBossLevel(this.level)
+                ? "audio/bgm/music_boss.wav"
+                : "audio/bgm/music_game.wav");
+
         // The next active segment starts on the next gameplay frame, after IO.
     }
 
@@ -1601,10 +1596,7 @@ public class GameScreen extends Screen {
 				this.ship.getPositionX() + this.ship.getWidth() / 2,
 				this.ship.getPositionY() + this.ship.getHeight() / 2);
 		this.itemManager.getBuffManager().resetAllBuffs(this.ship);
-		if (this.playerStatus.getLives() == 1 && !this.isLowHealthBGM) {
-			AudioManager.playBGM("audio/bgm/music_game_urgent.wav");
-			this.isLowHealthBGM = true;
-		}
+
 		this.logger.info(logMessage + ", " + this.playerStatus.getLives()
 				+ " lives remaining.");
         if (!this.playerStatus.isAlive()) openReviveOffer();
