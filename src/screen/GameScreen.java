@@ -220,6 +220,18 @@ public class GameScreen extends Screen {
     private long spaceHeldSince;
     /** Last countdown number that played a sound. */
     private int lastCountdown = -1;
+    /** Milliseconds of the 3-2-1-GO countdown shown after a pause. */
+    private static final int RESUME_DELAY = 4000;
+    /** True while the game is paused with Esc. */
+    private boolean paused;
+    /** True while the countdown after a pause is running. */
+    private boolean resuming;
+    /** Moment the countdown after a pause started. */
+    private long resumeStartTime;
+    /** Time from leaving the pause to the game going on. */
+    private Cooldown resumeCountdown;
+    /** State of the Esc key on the previous frame. */
+    private boolean pauseKeyWasDown;
 	private RunSession runSession;
     /** One service shared by every official stage in this Campaign run. */
     private ReviveService reviveService;
@@ -244,8 +256,7 @@ public class GameScreen extends Screen {
     static final String DEFEAT_ID_SEPARATOR = ":";
     /** Prevents repeated activation while holding H. */
     private boolean hyperfireKeyPressed = false;
-    /** Flag to track if the urgent low-health BGM is currently playing. */
-    private boolean isLowHealthBGM = false;
+
 
     /**
      * Constructor, establishes the properties of the screen.
@@ -575,25 +586,20 @@ public class GameScreen extends Screen {
         this.gameStartTime = System.currentTimeMillis();
         this.inputDelay = Core.getCooldown(INPUT_DELAY);
         this.inputDelay.reset();
+        this.resumeCountdown = Core.getCooldown(RESUME_DELAY);
 
 		if (this.bonusLife) {
 			AudioManager.playSFX("audio/sfx/bonus_life.wav");
 		}
 
-		// The last life is checked first, so the urgent track also plays on
-		// boss stages.
-		if (this.playerStatus.getLives() == 1) {
-			AudioManager.playBGM("audio/bgm/music_game_urgent.wav");
-			this.isLowHealthBGM = true;
-		} else if (isBossLevel(this.level)) {
-			// Boss stages start the boss music right away, so it already plays
-			// during the countdown instead of switching when the boss appears.
-			AudioManager.playBGM("audio/bgm/music_boss.wav");
-			this.isLowHealthBGM = false;
-		} else {
-			AudioManager.playBGM("audio/bgm/music_game.wav");
-			this.isLowHealthBGM = false;
-		}
+
+        if (isBossLevel(this.level)) {
+            // Boss stages start the boss music right away, so it already plays
+            // during the countdown instead of switching when the boss appears.
+            AudioManager.playBGM("audio/bgm/music_boss.wav");
+        } else {
+            AudioManager.playBGM("audio/bgm/music_game.wav");
+        }
 	}
 
     /**
@@ -619,8 +625,16 @@ public class GameScreen extends Screen {
 	 */
 	protected final void update() {
 		super.update();
+        // The revive modal owns Esc while it is open. Handle it before the
+        // campaign pause shortcut so declining a revive cannot pause instead.
         if (this.reviveOfferOpen) {
             updateReviveOffer();
+            draw();
+            return;
+        }
+
+        // While paused or counting down after a pause, only draw the frame.
+        if (handlePause()) {
             draw();
             return;
         }
@@ -820,6 +834,48 @@ public class GameScreen extends Screen {
             this.isRunning = false;
     }
 
+    /**
+     * Handles the Esc key: the first press pauses the game, the next one
+     * starts a countdown, and the game goes on when the countdown ends.
+     *
+     * @return True if the game logic has to be skipped this frame.
+     */
+    private boolean handlePause() {
+        boolean escDown = inputManager.isKeyDown(KeyEvent.VK_ESCAPE);
+        boolean escPressed = escDown && !this.pauseKeyWasDown;
+        this.pauseKeyWasDown = escDown;
+
+        if (this.paused) {
+            if (escPressed) {
+                this.paused = false;
+                this.resuming = true;
+                this.resumeStartTime = System.currentTimeMillis();
+                this.resumeCountdown.reset();
+                this.lastCountdown = -1;
+                AudioManager.resumeBGM();
+            }
+            return true;
+        }
+
+        boolean canPause = this.resuming
+                || (this.inputDelay.checkFinished() && !this.levelFinished);
+        if (escPressed && canPause) {
+            this.paused = true;
+            this.resuming = false;
+            if (this.runSession != null)
+                this.runSession.stopActiveSegment(System.nanoTime());
+            AudioManager.pauseBGM();
+            return true;
+        }
+
+        if (this.resuming) {
+            if (!this.resumeCountdown.checkFinished())
+                return true;
+            this.resuming = false;
+        }
+        return false;
+    }
+
     /** Progression shared by official and custom stages. */
     void advanceStageIfReady() {
         if (this.reviveOfferOpen) return;
@@ -960,9 +1016,11 @@ public class GameScreen extends Screen {
         this.reviveOfferOpen = false;
         this.revivePaymentConfirmed = false;
         this.reviveFeedback = new String[0];
-        this.isLowHealthBGM = this.playerStatus.getLives() == 1;
-        AudioManager.playBGM(this.isLowHealthBGM ? "audio/bgm/music_game_urgent.wav"
-                : isBossLevel(this.level) ? "audio/bgm/music_boss.wav" : "audio/bgm/music_game.wav");
+
+        AudioManager.playBGM(isBossLevel(this.level)
+                ? "audio/bgm/music_boss.wav"
+                : "audio/bgm/music_game.wav");
+
         // The next active segment starts on the next gameplay frame, after IO.
     }
 
@@ -1210,6 +1268,24 @@ public class GameScreen extends Screen {
 					/ 12);
         }
         drawManager.drawParticles(this.particleSystem);
+
+        // Pause overlay, or the countdown after leaving the pause.
+        if (this.paused) {
+            drawManager.drawPaused(this);
+            drawManager.drawCenteredRegularString(this,
+                    "Press ESC to resume", this.height / 2 + 50);
+        } else if (this.resuming) {
+            int countdown = (int) ((RESUME_DELAY
+                    - (System.currentTimeMillis()
+                    - this.resumeStartTime)) / 1000);
+            countdown = Math.max(0, countdown);
+            playCountdownSound(countdown);
+            drawManager.drawCountDown(this, "Paused", countdown);
+            drawManager.drawHorizontalLine(this, this.height / 2 - this.height
+                    / 12);
+            drawManager.drawHorizontalLine(this, this.height / 2 + this.height
+                    / 12);
+        }
 
         if (this.visibleAchievement != null)
             drawManager.drawAchievementNotice(this, this.visibleAchievement);
@@ -1524,10 +1600,7 @@ public class GameScreen extends Screen {
 				this.ship.getPositionX() + this.ship.getWidth() / 2,
 				this.ship.getPositionY() + this.ship.getHeight() / 2);
 		this.itemManager.getBuffManager().resetAllBuffs(this.ship);
-		if (this.playerStatus.getLives() == 1 && !this.isLowHealthBGM) {
-			AudioManager.playBGM("audio/bgm/music_game_urgent.wav");
-			this.isLowHealthBGM = true;
-		}
+
 		this.logger.info(logMessage + ", " + this.playerStatus.getLives()
 				+ " lives remaining.");
         if (!this.playerStatus.isAlive()) openReviveOffer();

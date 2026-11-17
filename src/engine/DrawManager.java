@@ -2,6 +2,7 @@ package engine;
 
 import boss.BossHudInfo;
 import entity.Boss;
+import screen.ShipCustomization;
 import entity.ShipType;
 import entity.item.ChameleonHull;
 
@@ -54,6 +55,9 @@ public final class DrawManager {
     private final BufferedImage bossASprite;
     private final BufferedImage bossBSprite;
 
+    private Color getThemeColor() {
+        return ShipCustomization.getColor();
+    }
     private int getNormalGameOverTitleY(final Screen screen) {
         int regularHeight = fontRegularMetrics.getHeight();
         int bigHeight = fontBigMetrics.getHeight();
@@ -577,7 +581,7 @@ public final class DrawManager {
         int top = Math.max(48, (screen.getHeight() - 340) / 2);
         backBufferGraphics.setColor(GameColors.BACKGROUND);
         backBufferGraphics.fillRect(panelX, top, panelWidth, 340);
-        backBufferGraphics.setColor(GameColors.HIGHLIGHT);
+        backBufferGraphics.setColor(getThemeColor());
         backBufferGraphics.drawRect(panelX, top, panelWidth - 1, 339);
         drawCenteredBigString(screen, "REVIVE?", top + 38);
         backBufferGraphics.setColor(GameColors.TEXT);
@@ -589,10 +593,10 @@ public final class DrawManager {
                 : "Revive unavailable. You can give up.", top + 138);
 
         backBufferGraphics.setColor(!reviveAvailable ? GameColors.TEXT_DIM
-                : giveUpSelected ? GameColors.TEXT : GameColors.HIGHLIGHT);
+                : giveUpSelected ? GameColors.TEXT : getThemeColor());
         drawCenteredRegularString(screen, (giveUpSelected ? "  " : "> ")
                 + "REVIVE - " + cost + " Credits", top + 178);
-        backBufferGraphics.setColor(giveUpSelected ? GameColors.HIGHLIGHT : GameColors.TEXT);
+        backBufferGraphics.setColor(giveUpSelected ? getThemeColor() : GameColors.TEXT);
         drawCenteredRegularString(screen, (giveUpSelected ? "> " : "  ") + "GIVE UP", top + 208);
         backBufferGraphics.setColor(GameColors.EXPLOSION_YELLOW);
         for (int i = 0; i < feedback.length; i++)
@@ -726,7 +730,7 @@ public final class DrawManager {
      *                  Y coordinate of the line.
      */
     public void drawHorizontalLine(final Screen screen, final int positionY) {
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         backBufferGraphics.drawLine(0, positionY, screen.getWidth(), positionY);
         backBufferGraphics.drawLine(0, positionY + 1, screen.getWidth(),
                 positionY + 1);
@@ -813,13 +817,12 @@ public final class DrawManager {
         drawCenteredRegularString(screen, instructionsString,
                 screen.getHeight() / 2);
 
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, titleString, screen.getHeight() / 3);
 
         long time = System.currentTimeMillis();
         int scale = 4;
-        int shipX = screen.getWidth() / 2 - Icon.TITLE_SHIP.getWidth()
-                * scale / 2;
+        int shipX = screen.getWidth() / 2 - Icon.TITLE_SHIP.getWidth() * scale / 2;
         int shipY = screen.getHeight() / 3 - 40
                 - (Icon.TITLE_SHIP.getHeight() + 3) * scale
                 + (int) Math.round(Math.sin(time / 400.0) * 3);
@@ -908,11 +911,11 @@ public final class DrawManager {
         else
             gameOverY = getNormalGameOverTitleY(screen);
 
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, gameOverString, gameOverY);
 
         if (acceptsInput)
-            backBufferGraphics.setColor(Color.GREEN);
+            backBufferGraphics.setColor(getThemeColor());
         else
             backBufferGraphics.setColor(Color.GRAY);
         drawCenteredRegularString(screen, continueOrExitString,
@@ -967,7 +970,7 @@ public final class DrawManager {
         String highScoreString = "High Scores";
         String instructionsString = "Press Space to return";
 
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, highScoreString, screen.getHeight() / 8);
 
         backBufferGraphics.setColor(Color.GRAY);
@@ -1105,7 +1108,7 @@ public final class DrawManager {
         backBufferGraphics.fillRect(0,
                 screen.getHeight() / 2 - rectHeight / 2,
                 rectWidth, rectHeight);
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
 
         if (number >= 4)
             drawCenteredBigString(screen, title,
@@ -1125,7 +1128,7 @@ public final class DrawManager {
             final String feedback, final boolean purchaseSucceeded, final SaveStatus saveStatus) {
         int width = screen.getWidth();
         int height = screen.getHeight();
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, "Shop", 34);
         backBufferGraphics.setColor(Color.WHITE);
         String credits = "Credits: " + assets.getBalance();
@@ -1141,10 +1144,10 @@ public final class DrawManager {
 
         int actionsY = height - 96;
         drawShopText("Back (Esc)", 31, actionsY, 12,
-                section == 2 && actionIndex == 0 ? Color.GREEN : Color.WHITE, 120);
+                section == 2 && actionIndex == 0 ? getThemeColor() : Color.WHITE, 120);
         if (saveStatus == SaveStatus.FAILED) {
             drawShopText("Retry save (R)", width / 2, actionsY, 12,
-                    section == 2 && actionIndex == 1 ? Color.GREEN : Color.WHITE, width / 2 - 24);
+                    section == 2 && actionIndex == 1 ? getThemeColor() : Color.WHITE, width / 2 - 24);
         }
         backBufferGraphics.setColor(purchaseSucceeded ? Color.GREEN : Color.ORANGE);
         drawShopCentered(screen, feedback, height - 70);
@@ -1160,7 +1163,7 @@ public final class DrawManager {
     private void drawShopShelf(Screen screen, List<ShopProduct> products, PlayerAssetsState assets,
             String heading, String emptyText, int top, int size, int index, boolean active) {
         int width = screen.getWidth();
-        drawShopText(heading, 31, top - 12, 12, active ? Color.GREEN : Color.WHITE, width - 110);
+        drawShopText(heading, 31, top - 12, 12, active ? getThemeColor() : Color.WHITE, width - 110);
         String count = products.isEmpty() ? "0 / 0" : (index + 1) + " / " + products.size();
         drawShopText(count, width - 70, top - 12, 10, Color.GRAY, 52);
         if (products.isEmpty()) {
@@ -1182,7 +1185,7 @@ public final class DrawManager {
         }
         if (products.size() > 1) {
             int cy = top + size / 2;
-            backBufferGraphics.setColor(active ? Color.GREEN : Color.GRAY);
+            backBufferGraphics.setColor(active ? getThemeColor() : Color.GRAY);
             backBufferGraphics.fillPolygon(new int[] { 12, 18, 18 }, new int[] { cy, cy - 5, cy + 5 }, 3);
             backBufferGraphics.fillPolygon(new int[] { width - 13, width - 19, width - 19 },
                     new int[] { cy, cy - 5, cy + 5 }, 3);
@@ -1191,16 +1194,16 @@ public final class DrawManager {
 
     private void drawShopCard(ShopProduct product, PlayerAssetsState assets,
             int x, int y, int size, boolean selected) {
-        backBufferGraphics.setColor(selected ? Color.GREEN : Color.DARK_GRAY);
+        backBufferGraphics.setColor(selected ? getThemeColor() : Color.DARK_GRAY);
         backBufferGraphics.drawRect(x, y, size, size);
         boolean owned = assets.getUnlockedContentIds().contains(product.getId());
         boolean available = product.isAvailableByDefault();
         String badge = available ? "Available" : owned ? "Owned" : "";
         drawShopText(badge, x + 7, y + 12, 9, Color.GRAY, size - 14);
-        backBufferGraphics.setColor(selected ? Color.GREEN : Color.WHITE);
+        backBufferGraphics.setColor(selected ? getThemeColor() : Color.WHITE);
         drawShopProductIcon(product, x + size / 2, y + 18);
         drawShopText(product.getName(), x + 9, y + 60, 11,
-                selected ? Color.GREEN : Color.WHITE, size - 18);
+                selected ? getThemeColor() : Color.WHITE, size - 18);
         drawShopDescription(product.getDescription(), x + 9, y + 75, size - 18);
         backBufferGraphics.setColor(Color.DARK_GRAY);
         backBufferGraphics.drawLine(x + 9, y + size - 25, x + size - 9, y + size - 25);
@@ -1305,18 +1308,18 @@ public final class DrawManager {
         String[] options = SETTINGS_MENU_OPTIONS;
         Icon[] icons = { Icon.AUDIO, Icon.CONTROLS, Icon.GAMEPLAY, Icon.BACK };
 
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, "Settings", screen.getHeight() / 5);
         drawIcon(Icon.SETTINGS, screen.getWidth() / 2
                 - fontBigMetrics.stringWidth("Settings") / 2
                 - Icon.SETTINGS.getWidth() * 3 - 10,
-                screen.getHeight() / 5 - 22, 3, Color.GREEN);
+                screen.getHeight() / 5 - 22, 3, getThemeColor());
 
         for (int i = 0; i < options.length; i++) {
             boolean selected = i == selectedOption;
             int labelY = screen.getHeight() / 2
                     + i * fontRegularMetrics.getHeight() * 2;
-            backBufferGraphics.setColor(selected ? Color.GREEN : Color.WHITE);
+            backBufferGraphics.setColor(selected ? getThemeColor() : Color.WHITE);
             drawCenteredRegularString(screen, options[i], labelY);
             drawMenuIcon(screen, icons[i], options[i], labelY, selected);
         }
@@ -1331,12 +1334,12 @@ public final class DrawManager {
         String[] labels = getControlsSettingsLabels(selectedOption,
                 waitingForKey);
 
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, "Controls", screen.getHeight() / 5);
 
         for (int i = 0; i < labels.length; i++) {
             backBufferGraphics.setColor(
-                    i == selectedOption ? Color.GREEN : Color.WHITE);
+                    i == selectedOption ? getThemeColor() : Color.WHITE);
             drawCenteredRegularString(screen, labels[i],
                     screen.getHeight() / 2
                             + i * fontRegularMetrics.getHeight() * 2);
@@ -1350,12 +1353,12 @@ public final class DrawManager {
     public void drawGameplaySettings(final Screen screen, final int selectedOption) {
         String[] options = GAMEPLAY_SETTINGS_OPTIONS;
 
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, "Gameplay", screen.getHeight() / 5);
 
         for (int i = 0; i < options.length; i++) {
             backBufferGraphics.setColor(
-                    i == selectedOption ? Color.GREEN : Color.WHITE);
+                    i == selectedOption ? getThemeColor() : Color.WHITE);
             drawCenteredRegularString(screen, options[i],
                     screen.getHeight() / 2
                             + i * fontRegularMetrics.getHeight() * 2);
@@ -1411,7 +1414,7 @@ public final class DrawManager {
         int barHeight = AUDIO_BAR_HEIGHT;
 
         // Title.
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, titleString, screen.getHeight() / 8);
 
         // Control instructions.
@@ -1426,7 +1429,7 @@ public final class DrawManager {
         for (int i = 0; i < optionStrings.length; i++) {
             // The selected option is green and the others are white.
             if (i == option)
-                backBufferGraphics.setColor(Color.GREEN);
+                backBufferGraphics.setColor(getThemeColor());
             else
                 backBufferGraphics.setColor(Color.WHITE);
             // Option name on the left edge of the column.
@@ -1460,7 +1463,7 @@ public final class DrawManager {
                 if (muted)
                     barColor = Color.GRAY;
                 else if (i == option)
-                    barColor = Color.GREEN;
+                    barColor = getThemeColor();
                 else
                     barColor = Color.WHITE;
                 drawVolumeBar(columnLeft,
@@ -1784,7 +1787,7 @@ public final class DrawManager {
             final String heading) {
         String introduceNameString = "Introduce name:";
 
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredRegularString(screen, heading, y);
         backBufferGraphics.setColor(Color.WHITE);
         drawCenteredRegularString(screen, introduceNameString, y + spacing);
@@ -1799,7 +1802,7 @@ public final class DrawManager {
 
         for (int i = 0; i < 3; i++) {
             if (i == nameCharSelected)
-                backBufferGraphics.setColor(Color.GREEN);
+                backBufferGraphics.setColor(getThemeColor());
             else
                 backBufferGraphics.setColor(Color.WHITE);
 
@@ -1817,7 +1820,7 @@ public final class DrawManager {
 
     public void drawAchievementNotice(final Screen screen,
             final Achievement achievement) {
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredRegularString(screen, "Achievement unlocked: "
                 + achievement.getName(), screen.getHeight() / 7);
         backBufferGraphics.setColor(Color.WHITE);
@@ -1857,7 +1860,7 @@ public final class DrawManager {
         int spacing = fontRegularMetrics.getHeight();
         int y = getAchievementResultsTitleY(screen, isNewRecord, failedStage,
                 achievements.size());
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, gameCleared ? "Game Cleared!" : "Game Over", y);
         if (failedStage > 0) {
             y += spacing;
@@ -1881,7 +1884,7 @@ public final class DrawManager {
             y += spacing * 3;
         }
         y += spacing;
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredRegularString(screen, "New achievements:", y);
         backBufferGraphics.setColor(Color.WHITE);
         for (Achievement achievement : achievements) {
@@ -1924,7 +1927,7 @@ public final class DrawManager {
         for (int i = 0; i < labels.length; i++) {
             boolean selected = option == codes[i];
             int labelY = firstY + i * spacing;
-            backBufferGraphics.setColor(selected ? Color.GREEN : Color.WHITE);
+            backBufferGraphics.setColor(selected ? getThemeColor() : Color.WHITE);
             drawCenteredRegularString(screen, labels[i], labelY);
             if (icons[i] != null)
                 drawMenuIcon(screen, icons[i], labels[i], labelY, selected);
@@ -2097,7 +2100,7 @@ public final class DrawManager {
 
     public void drawRecordsPage(final Screen screen,
             final RecordsService service, final int tab) {
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen,
                 tab == 0 ? "Run Records" : "Achievements", screen.getHeight() / 9);
         backBufferGraphics.setColor(Color.GRAY);
@@ -2190,7 +2193,7 @@ public final class DrawManager {
         String instructionsString = Core.getShopController().isShipAvailable(shipTypes[selectedIndex])
                 ? "SPACE: SELECT   ESC: BACK" : "UNLOCK IN SHOP   ESC: BACK";
 
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredRegularString(screen, titleString, screen.getHeight() / 6);
 
         int startY = screen.getHeight() / 3;
@@ -2208,6 +2211,7 @@ public final class DrawManager {
             } else if (isSelected) {
                 entity.Ship previewShip = new entity.Ship(screen.getWidth() / 2 - 13,
                         startY + i * spacing - 40, type);
+                previewShip.setColor(ShipCustomization.getColor());
                 drawEntity(previewShip, screen.getWidth() / 2 - 13, startY + i * spacing - 40);
             }
 
@@ -2216,7 +2220,7 @@ public final class DrawManager {
             String stats = String.format("SPEED: %d | HP: %d | RELOAD: %dMS",
                     type.getSpeed(), type.getMaxLives(), type.getShootingInterval());
 
-            backBufferGraphics.setColor(isSelected ? Color.GREEN : Color.GRAY);
+            backBufferGraphics.setColor(isSelected ? getThemeColor() : Color.GRAY);
             drawCenteredRegularString(screen, name, startY + i * spacing);
             drawCenteredRegularString(screen, stats, startY + i * spacing + 20);
         }
@@ -2259,14 +2263,14 @@ public final class DrawManager {
     public void drawHangarMenu(final Screen screen, final int selectedOption) {
         String[] labels = { "Choose ship", "Choose color", "Back" };
 
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, "Hangar", screen.getHeight() / 5);
 
         int firstY = screen.getHeight() / 2;
         int spacing = fontRegularMetrics.getHeight() * 3;
         for (int i = 0; i < labels.length; i++) {
             backBufferGraphics.setColor(
-                    i == selectedOption ? Color.GREEN : Color.WHITE);
+                    i == selectedOption ? getThemeColor() : Color.WHITE);
             drawCenteredRegularString(screen, labels[i], firstY + i * spacing);
         }
 
@@ -2282,12 +2286,12 @@ public final class DrawManager {
         String[] labels = { "Endless Mode", "Campaign Mode", "Back" };
 
         backBufferGraphics.setFont(fontBig);
-        backBufferGraphics.setColor(Color.GREEN);
+        backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, "Game Mode", screen.getHeight() / 3);
 
         backBufferGraphics.setFont(fontRegular);
         for (int i = 0; i < labels.length; i++) {
-            backBufferGraphics.setColor(i == option ? Color.GREEN : Color.WHITE);
+            backBufferGraphics.setColor(i == option ? getThemeColor() : Color.WHITE);
             drawCenteredRegularString(screen, labels[i],
                     screen.getHeight() / 3 + 60 + i * 40);
         }
