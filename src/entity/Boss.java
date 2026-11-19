@@ -13,10 +13,10 @@ import engine.DrawManager.SpriteType;
  */
 public class Boss extends Entity {
 
-    /** Width of the boss in pixels. */
-    public static final int WIDTH = 16 * 2;
+    /** Width of BOSS_A in pixels. */
+    public static final int WIDTH = 48 * 2;
     /** Height of the boss in pixels. */
-    public static final int HEIGHT = 7 * 2;
+    public static final int HEIGHT = 16 * 2;
 
     /** States the boss can be in. */
     public enum State {
@@ -26,13 +26,15 @@ public class Boss extends Entity {
     /** Kinds of bosses and their base values. */
     public enum BossType {
         /** Slow boss. */
-        BOSS_A(850, 1, 0.5, 0.25, 500),
+        BOSS_A(WIDTH, 1190, 1, 0.5, 0.25, 500),
         /** Fast boss, gets stronger earlier. */
-        BOSS_B(800, 3, 0.7, 0.4, 800);
+        BOSS_B(70, 1120, 3, 0.7, 0.4, 800);
 
+        /** Width in pixels, used by rendering and collision detection. */
+        private final int width;
         /** Maximum health of this kind of boss. */
         private final int maxHealth;
-        /** Base horizontal speed in pixels per frame. */
+        /** Base horizontal speed in half-pixels per frame. */
         private final int speed;
         /** Phase 2 starts below this share of max health. */
         private final double phase2Threshold;
@@ -41,14 +43,19 @@ public class Boss extends Entity {
         /** Score given to the player for defeating this boss (temporary). */
         private final int pointValue;
 
-        BossType(final int maxHealth, final int speed,
+        BossType(final int width, final int maxHealth, final int speed,
                  final double phase2Threshold, final double phase3Threshold,
                  final int pointValue) {
+            this.width = width;
             this.maxHealth = maxHealth;
             this.speed = speed;
             this.phase2Threshold = phase2Threshold;
             this.phase3Threshold = phase3Threshold;
             this.pointValue = pointValue;
+        }
+
+        public int getWidth() {
+            return this.width;
         }
 
         public int getMaxHealth() {
@@ -73,9 +80,9 @@ public class Boss extends Entity {
         }
     }
 
-    /** Extra speed added in phase 2. */
+    /** Extra speed added in phase 2, in half-pixels per frame. */
     private static final int PHASE_2_SPEED_BONUS = 1;
-    /** Extra speed added in phase 3. */
+    /** Extra speed added in phase 3, in half-pixels per frame. */
     private static final int PHASE_3_SPEED_BONUS = 2;
 
     /** Kind of this boss. */
@@ -84,8 +91,10 @@ public class Boss extends Entity {
     private final int maxHealth;
     /** Current health of the boss. */
     private int currentHealth;
-    /** Horizontal speed in pixels per frame. */
+    /** Horizontal speed in half-pixels per frame. */
     private int speed;
+    /** Carry fractional movement forward, rounding the first step up. */
+    private int movementRemainder = 1;
     /** Moving direction: 1 is right, -1 is left. */
     private int direction;
     /** Current state of the boss. */
@@ -105,7 +114,7 @@ public class Boss extends Entity {
      */
     public Boss(final int positionX, final int positionY, final BossType type) {
         // Temporarily reuses the bonus ship sprite (16 x 7 cells, 2px each).
-        super(positionX, positionY, WIDTH, HEIGHT, Color.MAGENTA);
+        super(positionX, positionY, type.getWidth(), HEIGHT, Color.MAGENTA);
         this.spriteType = SpriteType.EnemyShipSpecial;
 
         this.type = type;
@@ -134,7 +143,9 @@ public class Boss extends Entity {
         if (this.state == State.HIT)
             this.state = State.MOVING;
 
-        this.positionX += this.speed * this.direction;
+        int movement = this.speed + this.movementRemainder;
+        this.positionX += movement / 2 * this.direction;
+        this.movementRemainder = movement % 2;
 
         if (this.positionX < leftLimit) {
             this.positionX = leftLimit;
