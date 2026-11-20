@@ -46,3 +46,34 @@ jobs:
             build/test-results/test/
           if-no-files-found: ignore
           retention-days: 7
+      - name: Prepare QA package (Linux)
+        id: qa
+        if: success() && runner.os == 'Linux'
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          shopt -s nullglob
+          zips=(build/distributions/*.zip)
+          if [ "${#zips[@]}" -ne 1 ]; then
+            echo "Expected one distribution ZIP, found ${#zips[@]}"
+            exit 1
+          fi
+          if [ -n "$PR_NUMBER" ]; then
+            label="pr${PR_NUMBER}"
+          else
+            label="${GITHUB_REF_NAME//\//-}"
+          fi
+          name="space-invaders-${label}-${HEAD_SHA::7}.zip"
+          mkdir -p build/qa
+          cp "${zips[0]}" "build/qa/${name}"
+          echo "path=build/qa/${name}" >> "$GITHUB_OUTPUT"
+      - name: Upload QA package (Linux)
+        if: success() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.qa.outputs.path }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
