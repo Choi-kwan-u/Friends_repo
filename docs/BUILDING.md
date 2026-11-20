@@ -55,6 +55,6 @@ To run one suite, use `test --tests "engine.FileManagerTest"` for JUnit or `smok
 
 ## CI and local files
 
-[GitHub Actions](../.github/workflows/ci.yml) runs `clean build` with JDK 17 on Windows and Linux for pull requests and pushes to `main`. These two jobs verify the minimum supported Java version; JDK 21 and 25 are checked separately when changing JDK support or build tooling. Available test and coverage reports are kept as workflow artifacts for seven days, including on failed builds.
+[GitHub Actions](../.github/workflows/ci.yml) runs `clean build` with JDK 17 on Windows and Linux for pull requests and pushes to `main`. These two jobs verify the minimum supported Java version; JDK 21 and 25 are checked separately when changing JDK support or build tooling. Available test and coverage reports are kept as workflow artifacts for seven days, including on failed builds. When the Linux job succeeds, it also keeps the runnable game ZIP for seven days as an artifact named `space-invaders-pr<number>-<sha>.zip` or `space-invaders-main-<sha>.zip`. Use the ZIP only from runs where both Build checks passed. The ZIP does not bundle a JRE, so it needs Java 17 or later; unzip it and start the game with `bin/space-invaders` (or `bin/space-invaders.bat` on Windows).
 
 `clean` removes generated files under `build/`. Gradle `run` keeps local scores and player assets in the repository root; records and achievements use the existing `.space-invaders/` directory under the user's home. Build output, local saves, and personal IDE settings are excluded from Git.
