@@ -15,6 +15,8 @@ public class AudioBus {
 
     /** Volume from 0 to 100; the mixer treats 50 as the original gain. */
     private int volume = 50;
+    /** Playback speed shared by this bus. */
+    private double playbackRate = 1.0;
 
     /** Whether sample collection leaves all playback positions unchanged. */
     private boolean paused = false;
@@ -90,10 +92,10 @@ public class AudioBus {
         for (Map.Entry<Integer, AudioPlayback> entry : playbacks.entrySet()) {
             AudioPlayback playback = entry.getValue();
             if (!muted && !paused) {
-                left.offer(playback.getLeftSample());
-                right.offer(playback.getRightSample());
+                left.offer(playback.getLeftSample(looping));
+                right.offer(playback.getRightSample(looping));
             }
-            if (!paused) playback.advance(looping);
+            if (!paused) playback.advance(looping, playbackRate);
             if (playback.isFinished()) playbacks.remove(entry.getKey());
         }
     }
@@ -109,6 +111,22 @@ public class AudioBus {
             throw new IllegalArgumentException("Volume must be between 0 and 100: " + volume);
         }
         this.volume = volume;
+    }
+    /**
+     * Sets the playback rate without restarting active audio.
+     *
+     * @param rate playback speed (1.0 = normal speed)
+     */
+    public synchronized void setPlaybackRate(double rate) {
+        if (!Double.isFinite(rate) || rate < 0.5 || rate > 2.0) {
+            throw new IllegalArgumentException("Invalid playback rate: " + rate);
+        }
+        this.playbackRate = rate;
+    }
+
+    /** Returns the current playback rate. */
+    public synchronized double getPlaybackRate() {
+        return playbackRate;
     }
 
     /**
@@ -181,6 +199,8 @@ public class AudioBus {
         private AudioResource resource;
         /** Byte offset of the current stereo frame, or the data size at the end. */
         private int position = 0;
+        /** Fractional position between audio frames. */
+        private double fractionalFrame = 0.0;
 
         /**
          * Creates playback at the beginning of a resource in the mixer format.
@@ -200,27 +220,39 @@ public class AudioBus {
         }
 
         /**
-         * Reads the current left sample without advancing playback or applying gain.
-         *
-         * @return the signed 16-bit sample value, or zero after playback ends
+         * Reads a 16-bit PCM sample from the specified channel.
          */
-        public double getLeftSample() {
-            if (position >= resource.size())
-                return 0.0;
-
-            return (short) ((resource.getData(position) & 0xff) | (resource.getData(position + 1) << 8));
+        private double readSample(int bytePosition, int channelOffset) {
+            return (short) ((resource.getData(bytePosition + channelOffset) & 0xff)
+                    | (resource.getData(bytePosition + channelOffset + 1) << 8));
         }
 
         /**
-         * Reads the current right sample without advancing playback or applying gain.
-         *
-         * @return the signed 16-bit sample value, or zero after playback ends
+         * Interpolates between adjacent frames for smooth playback.
          */
-        public double getRightSample() {
-            if (position >= resource.size())
-                return 0.0;
+        private double getInterpolatedSample(int channelOffset, boolean loop) {
+            if (position >= resource.size()) return 0.0;
 
-            return (short) ((resource.getData(position + 2) & 0xff) | (resource.getData(position + 3) << 8));
+            double current = readSample(position, channelOffset);
+
+            int nextPosition = position + AudioMixer.FORMAT.getFrameSize();
+
+            if (nextPosition >= resource.size()) {
+                if (!loop) return current;
+                nextPosition = 0;
+            }
+
+            double next = readSample(nextPosition, channelOffset);
+
+            return current + (next - current) * fractionalFrame;
+        }
+
+        public double getLeftSample(boolean loop) {
+            return getInterpolatedSample(0, loop);
+        }
+
+        public double getRightSample(boolean loop) {
+            return getInterpolatedSample(2, loop);
         }
 
         /**
@@ -229,11 +261,24 @@ public class AudioBus {
          *
          * @param loop true to restart playback when it reaches the end
          */
-        public void advance(boolean loop) {
-            if (position < resource.size())
-                position += AudioMixer.FORMAT.getFrameSize();
-            if (position == resource.size()) {
-                if (loop) position = 0;
+        public void advance(boolean loop, double rate) {
+            if (position >= resource.size()) return;
+
+            int frameSize = AudioMixer.FORMAT.getFrameSize();
+
+            double movement = fractionalFrame + rate;
+            int frames = (int) movement;
+            fractionalFrame = movement - frames;
+
+            long nextPosition = (long) position + (long) frames * frameSize;
+
+            if (loop) {
+                position = (int) (nextPosition % resource.size());
+            } else if (nextPosition >= resource.size()) {
+                position = resource.size();
+                fractionalFrame = 0.0;
+            } else {
+                position = (int) nextPosition;
             }
         }
 
