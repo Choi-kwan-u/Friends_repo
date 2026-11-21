@@ -104,6 +104,22 @@ public class AudioManager {
             logger.log(Level.WARNING, "Failed to play BGM [path=" + path + "]: " + e, e);
         }
     }
+    /**
+     * Changes BGM playback speed without restarting the music.
+     *
+     * @param rate playback speed (1.0 = normal speed)
+     */
+    public static void setBGMPlaybackRate(double rate) {
+        initialize();
+        if (!initialized) return;
+
+        try {
+            bgmBus.setPlaybackRate(rate);
+        } catch (Exception e) {
+            logger.log(Level.WARNING,
+                    "Failed to change BGM playback rate: " + e, e);
+        }
+    }
 
     /**
      * Stops the currently playing background music.

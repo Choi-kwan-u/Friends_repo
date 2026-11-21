@@ -200,6 +200,10 @@ public class GameScreen extends Screen {
 	private final FloatingScoreHud floatingScoreHud = new FloatingScoreHud();
     /** Player lives left. */
 	private PlayerStatus playerStatus;
+    /** Playback speed when only one life remains. */
+    private static final double LAST_LIFE_BGM_RATE = 1.08;
+    /** Whether the last-life BGM speed is active. */
+    private boolean lastLifeBgmActive = false;
 	/** State of the debug shield key on the previous frame. */
 	private boolean shieldDebugKeyWasDown;
     /** Total bullets shot by the player. */
@@ -600,6 +604,9 @@ public class GameScreen extends Screen {
         } else {
             AudioManager.playBGM("audio/bgm/music_game.wav");
         }
+        this.lastLifeBgmActive = false;
+        AudioManager.setBGMPlaybackRate(1.0);
+        updateBgmPlaybackRate();
 	}
 
     /**
@@ -608,8 +615,15 @@ public class GameScreen extends Screen {
      * @return Next screen code.
      */
     public final int run() {
-        try { super.run(); }
-        finally { if (this.runSession != null) this.runSession.stopActiveSegment(System.nanoTime()); }
+        try {
+            super.run();
+        } finally {
+            AudioManager.setBGMPlaybackRate(1.0);
+
+            if (this.runSession != null) {
+                this.runSession.stopActiveSegment(System.nanoTime());
+            }
+        }
 
         // Life bonus is only awarded when the stage was cleared.
         if (this.stageCleared)
@@ -625,6 +639,8 @@ public class GameScreen extends Screen {
 	 */
 	protected final void update() {
 		super.update();
+
+        updateBgmPlaybackRate();
         // The revive modal owns Esc while it is open. Handle it before the
         // campaign pause shortcut so declining a revive cannot pause instead.
         if (this.reviveOfferOpen) {
@@ -1546,7 +1562,21 @@ public class GameScreen extends Screen {
         this.bullets.removeAll(neutralized);
         BulletPool.recycle(neutralized);
     }
+    /**
+     * Adjusts BGM speed based on the remaining lives.
+     * Boss music always keeps its normal speed.
+     */
+    private void updateBgmPlaybackRate() {
+        boolean shouldBeFast = !isBossLevel(this.level)
+                && this.playerStatus.getLives() == 1;
 
+        if (shouldBeFast != this.lastLifeBgmActive) {
+            AudioManager.setBGMPlaybackRate(
+                    shouldBeFast ? LAST_LIFE_BGM_RATE : 1.0);
+
+            this.lastLifeBgmActive = shouldBeFast;
+        }
+    }
     /**
 	 * Applies one hit to the player. Every source of damage goes through this
 	 * method, so that the protections and the effects of a hit cannot differ
@@ -1564,6 +1594,7 @@ public class GameScreen extends Screen {
 	 *            Description of the source, for the log line.
 	 * @return Whether a life was lost.
 	 */
+
 	// The damage path is accessible to tests in the screen package.
 	boolean damagePlayer(final int damage, final String logMessage) {
         if (this.levelFinished || this.reviveOfferOpen) return false;
@@ -1593,7 +1624,6 @@ public class GameScreen extends Screen {
             return false;
         }
 		AudioManager.playSFX("audio/sfx/player_hit.wav");
-
 		this.ship.destroy();
 		this.ship.triggerDamageFeedback();
 		this.particleSystem.spawnPlayerExplosion(
