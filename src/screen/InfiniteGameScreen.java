@@ -118,6 +118,8 @@ public class InfiniteGameScreen extends Screen {
     private static final int ANNIHILATOR_HOLD_TIME = 1000;
     /** Blink half-period of the full gauge (same as the ready message). */
     static final long GAUGE_BLINK_PERIOD = 300;
+    /** BGM speed when only one life remains. */
+    private static final double LAST_LIFE_BGM_RATE = 1.08;
 
     private int getEnemyBulletSpeed() {
         return (int) DifficultyAdjustWhilePlaying.getInstance().adjustEnemyBulletSpeed(ENEMY_BULLET_SPEED);
@@ -131,6 +133,8 @@ public class InfiniteGameScreen extends Screen {
     private Cooldown screenFinishedCooldown;
     private int score;
     private int lives;
+    /** Tracks whether last-life BGM speed is currently active. */
+    private boolean lastLifeBgmActive = false;
     /** Lives the player started with. */
     private final int maxLives;
     /** Total bullets shot by the player. */
@@ -251,11 +255,32 @@ public class InfiniteGameScreen extends Screen {
         this.inputDelay.reset();
 
         AudioManager.playBGM("audio/bgm/music_game.wav");
+        this.lastLifeBgmActive = false;
+        AudioManager.setBGMPlaybackRate(1.0);
+        updateBgmPlaybackRate();
+    }
+
+    /** Adjusts BGM speed based on remaining lives. */
+    private void updateBgmPlaybackRate() {
+        boolean shouldBeFast = !this.gameOver
+                && !this.reviveOfferOpen
+                && this.lives == 1;
+
+        if (shouldBeFast != this.lastLifeBgmActive) {
+            AudioManager.setBGMPlaybackRate(
+                    shouldBeFast ? LAST_LIFE_BGM_RATE : 1.0);
+            this.lastLifeBgmActive = shouldBeFast;
+        }
     }
 
     public final int run() {
-        try { super.run(); }
-        finally { if (runSession != null) runSession.stopActiveSegment(System.nanoTime()); }
+        try {
+            super.run();
+        } finally {
+            AudioManager.setBGMPlaybackRate(1.0);
+            if (runSession != null)
+                runSession.stopActiveSegment(System.nanoTime());
+        }
 
         this.logger.info("Infinite mode ended with a score of " + this.score);
         return this.returnCode;
@@ -263,6 +288,8 @@ public class InfiniteGameScreen extends Screen {
 
     protected final void update() {
         super.update();
+        updateBgmPlaybackRate();
+
         if (this.reviveOfferOpen) {
             updateReviveOffer();
             draw();
@@ -323,6 +350,7 @@ public class InfiniteGameScreen extends Screen {
         }
 
         manageCollisions();
+        updateBgmPlaybackRate();
         // Stop on the fatal hit, before grenades, beams or movement can earn
         // more rewards/change the world behind an offer in this same frame.
         if (this.lives <= 0 && !this.gameOver) {
@@ -438,6 +466,7 @@ public class InfiniteGameScreen extends Screen {
         this.reviveOfferOpen = false;
         this.reviveFeedback = new String[0];
         AudioManager.playBGM("audio/bgm/music_game.wav");
+        updateBgmPlaybackRate();
         // Active time starts on the next gameplay frame, excluding save IO.
     }
 
@@ -479,6 +508,7 @@ public class InfiniteGameScreen extends Screen {
     private void finishGameOver() {
         this.reviveOfferOpen = false;
         this.gameOver = true;
+        updateBgmPlaybackRate();
         if (runSession != null) runSession.stopActiveSegment(System.nanoTime());
         AudioManager.playSFX("audio/sfx/game_over.wav");
         this.screenFinishedCooldown.reset();
@@ -696,9 +726,7 @@ public class InfiniteGameScreen extends Screen {
         if (this.lives >= MAX_LIVES)
             return false;
         this.lives++;
-        // Out of danger: back to the normal music.
-        if (this.lives == 2)
-            AudioManager.playBGM("audio/bgm/music_game.wav");
+        updateBgmPlaybackRate();
         this.logger.info("Extra life, " + this.lives + " lives remaining.");
         return true;
     }
