@@ -1738,7 +1738,27 @@ public final class DrawManager {
         }
     }
 
+    /** Loads a stage image once; missing or invalid files use the normal starfield. */
+    public BufferedImage loadCampaignBackground(final String path) {
+        if (path == null) return null;
+        try (InputStream input = DrawManager.class.getClassLoader().getResourceAsStream(path)) {
+            if (input != null) {
+                BufferedImage image = ImageIO.read(input);
+                if (image != null) return image;
+            }
+            logger.warning("Campaign background missing or invalid: " + path);
+        } catch (IOException | RuntimeException failure) {
+            logger.warning("Failed to load campaign background: " + path + " / " + failure);
+        }
+        return null;
+    }
+
     public void initDrawing(final Screen screen) {
+        initDrawing(screen, null);
+    }
+
+    /** Starts a frame with a centered, aspect-preserving cover crop behind all objects/HUD. */
+    public void initDrawing(final Screen screen, final BufferedImage background) {
         backBuffer = new BufferedImage(screen.getWidth(), screen.getHeight(),
                 BufferedImage.TYPE_INT_RGB);
 
@@ -1748,7 +1768,17 @@ public final class DrawManager {
         backBufferGraphics.setColor(Color.BLACK);
         backBufferGraphics
                 .fillRect(0, 0, screen.getWidth(), screen.getHeight());
-        screen.drawBackground(backBufferGraphics);
+        if (background == null) {
+            screen.drawBackground(backBufferGraphics);
+        } else {
+            double scale = Math.max((double) screen.getWidth() / background.getWidth(),
+                    (double) screen.getHeight() / background.getHeight());
+            int width = (int) Math.ceil(background.getWidth() * scale);
+            int height = (int) Math.ceil(background.getHeight() * scale);
+            backBufferGraphics.drawImage(background,
+                    (screen.getWidth() - width) / 2, (screen.getHeight() - height) / 2,
+                    width, height, null);
+        }
 
         fontRegularMetrics = backBufferGraphics.getFontMetrics(fontRegular);
         fontBigMetrics = backBufferGraphics.getFontMetrics(fontBig);

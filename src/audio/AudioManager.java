@@ -90,10 +90,16 @@ public class AudioManager {
      *             without a leading slash or the res directory prefix
      */
     public static void playBGM(String path) {
+        playBGM(path, null);
+    }
+
+    /** Plays a track, retrying the default once if loading or playback fails. */
+    public static void playBGM(String path, String fallbackPath) {
         initialize();
         if (!initialized) return;
         try {
             AudioResource resource = audioCache.getAudioData(path);
+            if (resource == null) throw new IllegalArgumentException("Audio unavailable: " + path);
             AudioBus group = bgmBus;
             synchronized (group) {
                 group.stopAll();
@@ -102,6 +108,7 @@ public class AudioManager {
             }
         } catch (Exception e) {
             logger.log(Level.WARNING, "Failed to play BGM [path=" + path + "]: " + e, e);
+            if (fallbackPath != null && !fallbackPath.equals(path)) playBGM(fallbackPath);
         }
     }
     /**
