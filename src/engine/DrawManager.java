@@ -1139,8 +1139,9 @@ public final class DrawManager {
         int cardSize = Math.max(76, Math.min(120, Math.min((width - 80) / 3, (height - 248) / 2)));
         drawShopShelf(screen, upgrades, assets, "Upgrades", "No upgrades available",
                 96, cardSize, upgradeIndex, section == 0);
-        drawShopShelf(screen, unlocks, assets, "Unlocks", "No unlocks available",
-                132 + cardSize, cardSize, unlockIndex, section == 1);
+        if (!unlocks.isEmpty())
+            drawShopShelf(screen, unlocks, assets, "Unlocks", "No unlocks available",
+                    132 + cardSize, cardSize, unlockIndex, section == 1);
 
         int actionsY = height - 96;
         drawShopText("Back (Esc)", 31, actionsY, 12,
