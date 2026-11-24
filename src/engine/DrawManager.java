@@ -2261,7 +2261,7 @@ public final class DrawManager {
     }
 
     public void drawHangarMenu(final Screen screen, final int selectedOption) {
-        String[] labels = { "Choose ship", "Choose color", "Back" };
+        String[] labels = { "Choose color", "Back" };
 
         backBufferGraphics.setColor(getThemeColor());
         drawCenteredBigString(screen, "Hangar", screen.getHeight() / 5);
