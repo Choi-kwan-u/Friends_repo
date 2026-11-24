@@ -236,6 +236,11 @@ public class GameScreen extends Screen {
     private Cooldown resumeCountdown;
     /** State of the Esc key on the previous frame. */
     private boolean pauseKeyWasDown;
+    /** Selected pause action: resume by default, or end the campaign. */
+    private boolean pauseExitSelected;
+    private boolean pauseUpWasDown;
+    private boolean pauseDownWasDown;
+    private boolean pauseConfirmWasDown;
 	private RunSession runSession;
     /** One service shared by every official stage in this Campaign run. */
     private ReviveService reviveService;
@@ -860,9 +865,29 @@ public class GameScreen extends Screen {
         boolean escDown = inputManager.isKeyDown(KeyEvent.VK_ESCAPE);
         boolean escPressed = escDown && !this.pauseKeyWasDown;
         this.pauseKeyWasDown = escDown;
+        boolean up = inputManager.isKeyDown(KeyEvent.VK_UP);
+        boolean down = inputManager.isKeyDown(KeyEvent.VK_DOWN);
+        boolean confirm = inputManager.isKeyDown(KeyEvent.VK_ENTER)
+                || inputManager.isKeyDown(KeyEvent.VK_SPACE);
+        boolean upPressed = up && !this.pauseUpWasDown;
+        boolean downPressed = down && !this.pauseDownWasDown;
+        boolean confirmPressed = confirm && !this.pauseConfirmWasDown;
+        this.pauseUpWasDown = up;
+        this.pauseDownWasDown = down;
+        this.pauseConfirmWasDown = confirm;
 
         if (this.paused) {
-            if (escPressed) {
+            if (upPressed) this.pauseExitSelected = false;
+            if (downPressed) this.pauseExitSelected = true;
+            if (confirmPressed && this.pauseExitSelected) {
+                this.paused = false;
+                this.stageCleared = false;
+                this.isRunning = false;
+                AudioManager.resumeBGM();
+                AudioManager.playSFX("audio/sfx/menu_back.wav");
+                return true;
+            }
+            if (escPressed || (confirmPressed && !this.pauseExitSelected)) {
                 this.paused = false;
                 this.resuming = true;
                 this.resumeStartTime = System.currentTimeMillis();
@@ -877,6 +902,7 @@ public class GameScreen extends Screen {
                 || (this.inputDelay.checkFinished() && !this.levelFinished);
         if (escPressed && canPause) {
             this.paused = true;
+            this.pauseExitSelected = false;
             this.resuming = false;
             if (this.runSession != null)
                 this.runSession.stopActiveSegment(System.nanoTime());
@@ -1289,7 +1315,11 @@ public class GameScreen extends Screen {
         if (this.paused) {
             drawManager.drawPaused(this);
             drawManager.drawCenteredRegularString(this,
-                    "Press ESC to resume", this.height / 2 + 50);
+                    (this.pauseExitSelected ? "  " : "> ") + "Resume", this.height / 2 + 50);
+            drawManager.drawCenteredRegularString(this,
+                    (this.pauseExitSelected ? "> " : "  ") + "End Campaign", this.height / 2 + 75);
+            drawManager.drawCenteredRegularString(this,
+                    "Up/Down: choose  Enter/Space: confirm  Esc: resume", this.height / 2 + 105);
         } else if (this.resuming) {
             int countdown = (int) ((RESUME_DELAY
                     - (System.currentTimeMillis()
