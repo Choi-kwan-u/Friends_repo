@@ -31,6 +31,9 @@ public class Frame extends JFrame {
 	 *               Frame height.
 	 */
 	public Frame(final int width, final int height) {
+		// Set before setSize: browser JVMs (CheerpJ) read the overridden getWidth/getHeight during setSize.
+		this.width = width;
+		this.height = height;
 		setSize(width, height);
 		setResizable(false);
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
