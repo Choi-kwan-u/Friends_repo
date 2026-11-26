@@ -34,7 +34,6 @@ import screen.ScoreScreen;
 import screen.Screen;
 import screen.TitleScreen;
 import entity.ShipType;
-import screen.ShipSelectionScreen;
 import screen.PlayerRecordsScreen;
 import campaign.CampaignStageData;
 import campaign.CampaignManager;
@@ -147,7 +146,8 @@ public final class Core {
             LOGGER.warning(recordsService.getLoadWarning());
 
         GameState gameState;
-        ShipType selectedShip = ShipType.STANDARD;
+        // Every run uses the Standard ship; ship selection is turned off.
+        final ShipType selectedShip = ShipType.STANDARD;
 
         int returnCode = 1;
         do {
@@ -269,19 +269,6 @@ public final class Core {
                 case 11: {
                     currentScreen = new HangarMenuScreen(width, height, FPS);
                     returnCode = frame.setScreen(currentScreen);
-                    break;
-                }
-
-                case 12: {
-                    ShipSelectionScreen shipSelection = new ShipSelectionScreen(width, height, FPS);
-                    currentScreen = shipSelection;
-                    int selectionResult = frame.setScreen(currentScreen);
-
-                    if (selectionResult == ShipSelectionScreen.SHIP_SELECTED) {
-                        selectedShip = shipSelection.getSelectedShip();
-                    }
-
-                    returnCode = 11;
                     break;
                 }
 

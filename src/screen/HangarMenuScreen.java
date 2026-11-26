@@ -10,8 +10,8 @@ import engine.Cooldown;
 public class HangarMenuScreen extends Screen {
 
     public static final int RETURN_TO_MAIN_MENU = 1;
-    public static final int OPEN_SHIP_SELECTION = 12;
     public static final int OPEN_COLOR_SELECTION = 13;
+    private static final int OPTION_COUNT = 2;
 
     private static final int SELECTION_TIME = 200;
 
@@ -45,12 +45,13 @@ public class HangarMenuScreen extends Screen {
 
         if (this.inputManager.isKeyDown(KeyEvent.VK_UP)
                 || this.inputManager.isKeyDown(KeyEvent.VK_W)) {
-            this.selectedOption = (this.selectedOption + 2) % 3;
+            this.selectedOption = (this.selectedOption + OPTION_COUNT - 1)
+                    % OPTION_COUNT;
             this.selectionCooldown.reset();
             AudioManager.playSFX("audio/sfx/menu_move.wav");
         } else if (this.inputManager.isKeyDown(KeyEvent.VK_DOWN)
                 || this.inputManager.isKeyDown(KeyEvent.VK_S)) {
-            this.selectedOption = (this.selectedOption + 1) % 3;
+            this.selectedOption = (this.selectedOption + 1) % OPTION_COUNT;
             this.selectionCooldown.reset();
             AudioManager.playSFX("audio/sfx/menu_move.wav");
         } else if (this.inputManager.isKeyDown(KeyEvent.VK_SPACE)
@@ -65,8 +66,6 @@ public class HangarMenuScreen extends Screen {
 
     private void selectOption() {
         if (this.selectedOption == 0) {
-            this.returnCode = OPEN_SHIP_SELECTION;
-        } else if (this.selectedOption == 1) {
             this.returnCode = OPEN_COLOR_SELECTION;
         } else {
             this.returnCode = RETURN_TO_MAIN_MENU;
