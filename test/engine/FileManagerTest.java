@@ -105,6 +105,25 @@ class FileManagerTest {
     }
 
     @Test
+    @DisplayName("High scores are saved when the storage directory does not exist yet")
+    void testSaveHighScoresCreatesMissingStorageDirectory() throws IOException {
+        String previous = System.getProperty("invaders.storageDir");
+        try {
+            System.setProperty("invaders.storageDir", tempDir.resolve("missing").toString());
+
+            fileManager.saveHighScores(java.util.List.of(new Score("WEB", 40)));
+
+            assertEquals(40, fileManager.loadHighScores().get(0).getScore());
+        } finally {
+            if (previous == null) {
+                System.clearProperty("invaders.storageDir");
+            } else {
+                System.setProperty("invaders.storageDir", previous);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("loadPlayerAssets throws IOException when unlocked content ID has malformed URL encoding")
     void testLoadMalformedEncodedUnlockIdThrowsIOException() throws IOException {
         String malformedData = "version=1\nbalance=100\nunlockedContentIds=VALID_SHIP,%ZZ_INVALID\nitemQuantities=ITEM_A:1\n";
