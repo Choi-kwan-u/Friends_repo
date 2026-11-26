@@ -240,7 +240,8 @@ public class GameScreen extends Screen {
     private boolean pauseExitSelected;
     private boolean pauseUpWasDown;
     private boolean pauseDownWasDown;
-    private boolean pauseConfirmWasDown;
+    private boolean pauseEnterWasDown;
+    private boolean pauseSpaceWasDown;
 	private RunSession runSession;
     /** One service shared by every official stage in this Campaign run. */
     private ReviveService reviveService;
@@ -867,14 +868,16 @@ public class GameScreen extends Screen {
         this.pauseKeyWasDown = escDown;
         boolean up = inputManager.isKeyDown(KeyEvent.VK_UP);
         boolean down = inputManager.isKeyDown(KeyEvent.VK_DOWN);
-        boolean confirm = inputManager.isKeyDown(KeyEvent.VK_ENTER)
-                || inputManager.isKeyDown(KeyEvent.VK_SPACE);
+        boolean enter = inputManager.isKeyDown(KeyEvent.VK_ENTER);
+        boolean space = inputManager.isKeyDown(KeyEvent.VK_SPACE);
         boolean upPressed = up && !this.pauseUpWasDown;
         boolean downPressed = down && !this.pauseDownWasDown;
-        boolean confirmPressed = confirm && !this.pauseConfirmWasDown;
+        boolean confirmPressed = (enter && !this.pauseEnterWasDown)
+                || (space && !this.pauseSpaceWasDown);
         this.pauseUpWasDown = up;
         this.pauseDownWasDown = down;
-        this.pauseConfirmWasDown = confirm;
+        this.pauseEnterWasDown = enter;
+        this.pauseSpaceWasDown = space;
 
         if (this.paused) {
             if (upPressed) this.pauseExitSelected = false;
@@ -1319,7 +1322,9 @@ public class GameScreen extends Screen {
             drawManager.drawCenteredRegularString(this,
                     (this.pauseExitSelected ? "> " : "  ") + "End Campaign", this.height / 2 + 75);
             drawManager.drawCenteredRegularString(this,
-                    "Up/Down: choose  Enter/Space: confirm  Esc: resume", this.height / 2 + 105);
+                    "Up/Down: choose", this.height / 2 + 105);
+            drawManager.drawCenteredRegularString(this,
+                    "Enter/Space: confirm  Esc: resume", this.height / 2 + 125);
         } else if (this.resuming) {
             int countdown = (int) ((RESUME_DELAY
                     - (System.currentTimeMillis()
