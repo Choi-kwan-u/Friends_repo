@@ -101,28 +101,20 @@ class UpgradeShopScreenTest {
     }
 
     @Test
-    void lowerRowBuysOnlySpeedsterAndUpperUpgradesStillWork() throws Exception {
+    void shipCardsAreHiddenAndUpperUpgradesStillWork() throws Exception {
         Path save = temp.resolve("assets.properties");
         tap(KeyEvent.VK_DOWN);
-        for (int ship = 0; ship < entity.ShipType.values().length; ship++) {
-            tap(KeyEvent.VK_ENTER);
-            tap(KeyEvent.VK_RIGHT);
-        }
-        assertEquals(800, assets.getBalance());
-        assertEquals(java.util.Collections.singleton("ship.speedster"),
-                assets.snapshot().getUnlockedContentIds());
-        assertTrue(Files.exists(save));
-        assertEquals(ShopController.SaveStatus.SAVED, controller.getSaveStatus());
+        tap(KeyEvent.VK_RIGHT);
+        tap(KeyEvent.VK_ENTER);
+        assertEquals(1000, assets.getBalance());
+        assertTrue(assets.snapshot().getUnlockedContentIds().isEmpty());
+        assertFalse(Files.exists(save));
 
         tap(KeyEvent.VK_UP);
         tap(KeyEvent.VK_ENTER);
-        assertEquals(700, assets.getBalance());
-        assertEquals(java.util.Set.of("ship.speedster", PermanentUpgrade.HULL.getProductId(1)),
+        assertEquals(900, assets.getBalance());
+        assertEquals(java.util.Set.of(PermanentUpgrade.HULL.getProductId(1)),
                 assets.snapshot().getUnlockedContentIds());
-        byte[] written = Files.readAllBytes(save);
-        tap(KeyEvent.VK_DOWN);
-        tap(KeyEvent.VK_ENTER);
-        assertArrayEquals(written, Files.readAllBytes(save));
-        assertEquals(700, assets.getBalance());
+        assertTrue(Files.exists(save));
     }
 }

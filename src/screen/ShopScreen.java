@@ -46,6 +46,7 @@ public class ShopScreen extends Screen {
         upgrades.clear();
         unlocks.clear();
         for (ShopProduct product : controller.getProducts()) {
+            if (product.getShipType() != null) continue;
             if (product.getCategory() == Category.UPGRADE) upgrades.add(product);
             else unlocks.add(product);
         }
