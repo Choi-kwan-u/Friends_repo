@@ -77,3 +77,71 @@ jobs:
           archive: false
           if-no-files-found: error
           retention-days: 7
+
+  deploy-web:
+    name: Deploy web build (GitHub Pages)
+    # Runs only after every build/test job passes on a main push.
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: web
+
+      - name: Resolve QA package name
+        id: qa
+        # Must match the name built in "Prepare QA package (Linux)".
+        run: echo "name=space-invaders-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Download QA package
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ steps.qa.outputs.name }}
+          path: dl
+
+      - name: Assemble site
+        shell: bash
+        env:
+          QA_NAME: ${{ steps.qa.outputs.name }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p unpacked site
+          zip=$(find dl -name "$QA_NAME" -type f | head -n1)
+          if [ -n "$zip" ]; then
+            unzip -q "$zip" -d unpacked
+          else
+            # Fall back to already-extracted contents.
+            cp -r dl/. unpacked/
+          fi
+          # distZip layout: <name>/lib/<project>.jar (resources are inside the JAR).
+          jar=$(find unpacked -path '*/lib/*.jar' -size +1M | head -n1)
+          if [ -z "$jar" ]; then echo "Game JAR not found"; find unpacked; exit 1; fi
+          cp "$jar" site/game.jar
+          sed -e "s|__SHA__|${GITHUB_SHA::7}|g" \
+              -e "s|__FULL_SHA__|${GITHUB_SHA}|g" \
+              -e "s|__REPO_URL__|${REPO_URL}|g" \
+              web/play.html > site/index.html
+          ls -lh site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
