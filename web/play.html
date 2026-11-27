@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Space Invaders · Friends (__SHA__)</title>
+  <script src="https://cjrtnc.leaningtech.com/5.0/loader.js"></script>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; color: #ccc; font-family: sans-serif; }
+    #info { position: fixed; top: 4px; right: 8px; font-size: 12px; opacity: .7; z-index: 10; }
+    #info a { color: #8cf; }
+    #start { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 12px;
+             align-items: center; justify-content: center; z-index: 20; background: #000; }
+    #start button { font-size: 18px; padding: 12px 28px; border-radius: 8px; border: 1px solid #5dcaa5;
+                    background: #04342c; color: #9fe1cb; cursor: pointer; }
+    #start p { margin: 0; font-size: 13px; color: #888; text-align: center; line-height: 1.6; }
+    #credit { position: fixed; bottom: 4px; right: 8px; font-size: 11px; opacity: .5; z-index: 10; }
+  </style>
+</head>
+<body>
+  <div id="info">main · <code>__SHA__</code> · <a href="__REPO_URL__/commit/__FULL_SHA__">커밋 보기</a></div>
+  <div id="start">
+    <button id="play" type="button">클릭해서 시작</button>
+    <p>첫 실행은 Java 런타임과 게임(약 90MB)을 받느라 수십 초 걸릴 수 있어요.<br>
+       웹 버전은 소리가 나지 않아요. 소리 확인은 QA zip으로 해 주세요.</p>
+  </div>
+  <div id="credit">Built with CheerpJ</div>
+  <script>
+    document.getElementById("play").addEventListener("click", async (event) => {
+      event.target.disabled = true;
+      event.target.textContent = "불러오는 중…";
+      // Start the JVM on click so the first download only begins when the user asks.
+      await cheerpjInit({
+        version: 17,
+        // /files is the only writable mount (IndexedDB) and survives reloads.
+        javaProperties: ["invaders.storageDir=/files/invaders-main", "file.encoding=UTF-8"]
+      });
+      document.getElementById("start").remove();
+      cheerpjCreateDisplay(-1, -1, document.body);
+      // /app maps to the site root, so include the Pages sub-path (/Friends_repo/).
+      const dir = location.pathname.replace(/[^/]*$/, "");
+      await cheerpjRunJar("/app" + dir + "game.jar");
+    }, { once: true });
+  </script>
+</body>
+</html>
