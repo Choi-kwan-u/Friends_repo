@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.Random;
 import campaign.CampaignStageData;
+import campaign.CampaignThemeData;
+import java.awt.image.BufferedImage;
 import engine.DifficultyAdjustWhilePlaying;
 import entity.item.ChameleonHull;
 import entity.item.ItemManager;
@@ -204,6 +206,10 @@ public class GameScreen extends Screen {
     private static final double LAST_LIFE_BGM_RATE = 1.08;
     /** Whether the last-life BGM speed is active. */
     private boolean lastLifeBgmActive = false;
+    /** Official campaign resources; custom levels retain the default theme. */
+    private CampaignThemeData campaignTheme;
+    /** Loaded once on stage entry, never during drawing. */
+    private BufferedImage campaignBackground;
 	/** State of the debug shield key on the previous frame. */
 	private boolean shieldDebugKeyWasDown;
     /** Total bullets shot by the player. */
@@ -602,13 +608,12 @@ public class GameScreen extends Screen {
 		}
 
 
-        if (isBossLevel(this.level)) {
-            // Boss stages start the boss music right away, so it already plays
-            // during the countdown instead of switching when the boss appears.
-            AudioManager.playBGM("audio/bgm/music_boss.wav");
-        } else {
-            AudioManager.playBGM("audio/bgm/music_game.wav");
-        }
+        this.campaignTheme = this.customWaves == null
+                ? CampaignThemeData.forLevel(this.level) : null;
+        this.campaignBackground = this.campaignTheme == null ? null
+                : drawManager.loadCampaignBackground(this.campaignTheme.getBackgroundPath());
+        // Boss stages also start their own track during the entry countdown.
+        playStageBgm();
         this.lastLifeBgmActive = false;
         AudioManager.setBGMPlaybackRate(1.0);
         updateBgmPlaybackRate();
@@ -1061,11 +1066,20 @@ public class GameScreen extends Screen {
         this.revivePaymentConfirmed = false;
         this.reviveFeedback = new String[0];
 
-        AudioManager.playBGM(isBossLevel(this.level)
-                ? "audio/bgm/music_boss.wav"
-                : "audio/bgm/music_game.wav");
+        playStageBgm();
 
         // The next active segment starts on the next gameplay frame, after IO.
+    }
+
+    /** Shared by stage entry and paid recovery so reviving keeps the stage theme. */
+    private void playStageBgm() {
+        String fallback = isBossLevel(this.level)
+                ? "audio/bgm/music_boss.wav" : "audio/bgm/music_game.wav";
+        if (this.campaignTheme == null) {
+            AudioManager.playBGM(fallback);
+        } else {
+            AudioManager.playBGM(this.campaignTheme.getBgmPath(), fallback);
+        }
     }
 
     private void setGameplayPaused(final boolean paused) {
@@ -1209,7 +1223,7 @@ public class GameScreen extends Screen {
      * Draws the elements associated with the screen.
      */
     private void draw() {
-        drawManager.initDrawing(this);
+        drawManager.initDrawing(this, this.campaignBackground);
 
         if (this.annihilator.isCharging() || this.annihilator.isFiring())
             drawManager.drawOrbitalAnnihilator(
