@@ -242,6 +242,12 @@ public class GameScreen extends Screen {
     private Cooldown resumeCountdown;
     /** State of the Esc key on the previous frame. */
     private boolean pauseKeyWasDown;
+    /** Selected pause action: resume by default, or end the campaign. */
+    private boolean pauseExitSelected;
+    private boolean pauseUpWasDown;
+    private boolean pauseDownWasDown;
+    private boolean pauseEnterWasDown;
+    private boolean pauseSpaceWasDown;
 	private RunSession runSession;
     /** One service shared by every official stage in this Campaign run. */
     private ReviveService reviveService;
@@ -529,7 +535,6 @@ public class GameScreen extends Screen {
 		// The hangar colour has to go through setBaseColor: the ship resets
 		// its colour to the base one every frame once the damage flash is
 		// over, so a plain setColour is wiped back to the default green.
-		this.ship.setBaseColor(ShipCustomization.getColor());
 		this.ship.setBaseColor(ShipCustomization.getColor());
         this.itemManager = new ItemManager(this.height);
 
@@ -865,9 +870,31 @@ public class GameScreen extends Screen {
         boolean escDown = inputManager.isKeyDown(KeyEvent.VK_ESCAPE);
         boolean escPressed = escDown && !this.pauseKeyWasDown;
         this.pauseKeyWasDown = escDown;
+        boolean up = inputManager.isKeyDown(KeyEvent.VK_UP);
+        boolean down = inputManager.isKeyDown(KeyEvent.VK_DOWN);
+        boolean enter = inputManager.isKeyDown(KeyEvent.VK_ENTER);
+        boolean space = inputManager.isKeyDown(KeyEvent.VK_SPACE);
+        boolean upPressed = up && !this.pauseUpWasDown;
+        boolean downPressed = down && !this.pauseDownWasDown;
+        boolean confirmPressed = (enter && !this.pauseEnterWasDown)
+                || (space && !this.pauseSpaceWasDown);
+        this.pauseUpWasDown = up;
+        this.pauseDownWasDown = down;
+        this.pauseEnterWasDown = enter;
+        this.pauseSpaceWasDown = space;
 
         if (this.paused) {
-            if (escPressed) {
+            if (upPressed) this.pauseExitSelected = false;
+            if (downPressed) this.pauseExitSelected = true;
+            if (confirmPressed && this.pauseExitSelected) {
+                this.paused = false;
+                this.stageCleared = false;
+                this.isRunning = false;
+                AudioManager.resumeBGM();
+                AudioManager.playSFX("audio/sfx/menu_back.wav");
+                return true;
+            }
+            if (escPressed || (confirmPressed && !this.pauseExitSelected)) {
                 this.paused = false;
                 this.resuming = true;
                 this.resumeStartTime = System.currentTimeMillis();
@@ -882,6 +909,7 @@ public class GameScreen extends Screen {
                 || (this.inputDelay.checkFinished() && !this.levelFinished);
         if (escPressed && canPause) {
             this.paused = true;
+            this.pauseExitSelected = false;
             this.resuming = false;
             if (this.runSession != null)
                 this.runSession.stopActiveSegment(System.nanoTime());
@@ -1303,7 +1331,13 @@ public class GameScreen extends Screen {
         if (this.paused) {
             drawManager.drawPaused(this);
             drawManager.drawCenteredRegularString(this,
-                    "Press ESC to resume", this.height / 2 + 50);
+                    (this.pauseExitSelected ? "  " : "> ") + "Resume", this.height / 2 + 50);
+            drawManager.drawCenteredRegularString(this,
+                    (this.pauseExitSelected ? "> " : "  ") + "End Campaign", this.height / 2 + 75);
+            drawManager.drawCenteredRegularString(this,
+                    "Up/Down: choose", this.height / 2 + 105);
+            drawManager.drawCenteredRegularString(this,
+                    "Enter/Space: confirm  Esc: resume", this.height / 2 + 125);
         } else if (this.resuming) {
             int countdown = (int) ((RESUME_DELAY
                     - (System.currentTimeMillis()

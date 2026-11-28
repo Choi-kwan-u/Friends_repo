@@ -299,6 +299,11 @@ public final class FileManager {
 		try {
 			File scoresFile = resolveStoragePath(filename).toFile();
 
+			Path parent = scoresFile.toPath().toAbsolutePath().getParent();
+			if (parent != null) {
+				Files.createDirectories(parent);
+			}
+
 			if (!scoresFile.exists())
 				scoresFile.createNewFile();
 
