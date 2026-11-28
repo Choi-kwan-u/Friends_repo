@@ -530,7 +530,6 @@ public class GameScreen extends Screen {
 		// its colour to the base one every frame once the damage flash is
 		// over, so a plain setColour is wiped back to the default green.
 		this.ship.setBaseColor(ShipCustomization.getColor());
-		this.ship.setBaseColor(ShipCustomization.getColor());
         this.itemManager = new ItemManager(this.height);
 
         this.shieldDroppedThisLevel = false;
